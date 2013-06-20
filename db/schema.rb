@@ -11,7 +11,7 @@
 #
 # It's strongly recommended to check this file into your version control system.
 
-ActiveRecord::Schema.define(:version => 20130521141357) do
+ActiveRecord::Schema.define(:version => 20130614131351) do
 
   create_table "broadcasts", :force => true do |t|
     t.integer  "recipient_id"
@@ -24,50 +24,50 @@ ActiveRecord::Schema.define(:version => 20130521141357) do
   end
 
   create_table "builds", :force => true do |t|
-    t.integer  "repository_id"
-    t.string   "number"
-    t.datetime "started_at"
-    t.datetime "finished_at"
-    t.datetime "created_at",          :null => false
-    t.datetime "updated_at",          :null => false
-    t.text     "config"
-    t.integer  "commit_id"
-    t.integer  "request_id"
-    t.string   "state"
-    t.integer  "duration"
-    t.integer  "owner_id"
-    t.string   "owner_type"
-    t.string   "event_type"
-    t.string   "previous_state"
-    t.text     "pull_request_title"
-    t.integer  "pull_request_number"
-    t.string   "branch"
+    t.integer    "repository_id"
+    t.string     "number"
+    t.datetime   "started_at"
+    t.datetime   "finished_at"
+    t.datetime   "created_at",          :null => false
+    t.datetime   "updated_at",          :null => false
+    t.text       "config"
+    t.integer    "commit_id"
+    t.integer    "request_id"
+    t.string     "state"
+    t.integer    "duration"
+    t.integer    "owner_id"
+    t.string     "owner_type"
+    t.string     "event_type"
+    t.string     "previous_state"
+    t.text       "pull_request_title"
+    t.integer    "pull_request_number"
+    t.text_array "branches"
   end
 
   add_index "builds", ["finished_at"], :name => "index_builds_on_finished_at"
-  add_index "builds", ["repository_id", "event_type", "state", "branch"], :name => "index_builds_on_repository_id_and_event_type_and_state_and_bran"
+  add_index "builds", ["repository_id", "event_type", "state", "branches"], :name => "index_builds_on_repository_id_and_event_type_and_state_and_bran"
   add_index "builds", ["repository_id", "event_type"], :name => "index_builds_on_repository_id_and_event_type"
   add_index "builds", ["repository_id", "state"], :name => "index_builds_on_repository_id_and_state"
   add_index "builds", ["request_id"], :name => "index_builds_on_request_id"
   add_index "builds", ["state"], :name => "index_builds_on_state"
 
   create_table "commits", :force => true do |t|
-    t.integer  "repository_id"
-    t.string   "commit"
-    t.string   "ref"
-    t.string   "branch"
-    t.text     "message"
-    t.string   "compare_url"
-    t.datetime "committed_at"
-    t.string   "committer_name"
-    t.string   "committer_email"
-    t.string   "author_name"
-    t.string   "author_email"
-    t.datetime "created_at",      :null => false
-    t.datetime "updated_at",      :null => false
+    t.integer    "repository_id"
+    t.string     "commit"
+    t.string     "ref"
+    t.text_array "branches"
+    t.text       "message"
+    t.string     "compare_url"
+    t.datetime   "committed_at"
+    t.string     "committer_name"
+    t.string     "committer_email"
+    t.string     "author_name"
+    t.string     "author_email"
+    t.datetime   "created_at",      :null => false
+    t.datetime   "updated_at",      :null => false
   end
 
-  add_index "commits", ["branch"], :name => "index_commits_on_branch"
+  add_index "commits", ["branches"], :name => "index_commits_on_branch"
   add_index "commits", ["commit"], :name => "index_commits_on_commit"
 
   create_table "emails", :force => true do |t|
