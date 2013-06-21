@@ -39,6 +39,9 @@ class Request
         Travis.logger.warn("[request:finish] Request not creating a build: config is blank, config=#{config.inspect} commit=#{commit.try(:commit).inspect}")
       elsif !approved?
         Travis.logger.warn("[request:finish] Request not creating a build: not approved commit=#{commit.try(:commit).inspect} message=#{approval.message.inspect}")
+      elsif existing_build
+        existing_build.update_attributes!(branches: commit.branches)
+        Travis.logger.info("[request:finish] A build for commit#{commit.try(:commit).inspect} already exists")
       else
         add_build
         Travis.logger.info("[request:finish] Request created a build. commit=#{commit.try(:commit).inspect}")
@@ -58,6 +61,14 @@ class Request
 
       def fetch_config
         Travis.run_service(:github_fetch_config, request: self) # TODO move to a service, have it pass the config to configure
+      end
+
+      def existing_build
+        if defined?(@existing_build)
+          @existing_build
+        else
+          @existing_build = builds.where(repository_id: repository.id, commit_id: commit.id).first
+        end
       end
 
       def add_build
