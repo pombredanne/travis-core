@@ -34,6 +34,7 @@ describe Travis::Api::V2::Pusher::Job::Created do
       'sha' => '62aae5f70ceee39123ef',
       'message' => 'the commit message',
       'branch' => 'master',
+      'branches' => ['master', 'development'],
       'message' => 'the commit message',
       'committed_at' => json_format_time(Time.now.utc - 1.hour),
       'committer_name' => 'Sven Fuchs',
