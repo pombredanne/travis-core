@@ -1,5 +1,3 @@
-# TODO include_logs? has been removed. gotta be deprecated!
-#
 module Travis
   module Addons
     module Webhook

@@ -34,10 +34,8 @@ class Log < ActiveRecord::Base
   end
 
   def clear!
-    update_attributes!(aggregated_at: nil, archived_at: nil, archive_verified: nil)
-    update_column(:content, '')        # TODO why in the world does update_attributes not set content to ''
-    update_column(:aggregated_at, nil) # TODO why in the world does update_attributes not set aggregated_at to nil?
-    parts.delete_all
+    update_attributes!(aggregated_at: nil, archived_at: nil, archive_verified: nil, content: "", aggregated_at: nil)
+    parts.destroy_all
   end
 
   def archived?

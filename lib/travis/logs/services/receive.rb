@@ -4,9 +4,6 @@ module Travis
   module Logs
     module Services
       class Receive < Travis::Services::Base
-        # TODO remove this once we know aggregation works fine and the worker passes a :final flag
-        FINAL = 'Done. Build script exited with:'
-
         register :logs_receive
 
         def run
@@ -55,7 +52,7 @@ module Travis
           end
 
           def final?
-            !!data[:final] || chars.include?(FINAL)
+            !!data[:final]
           end
 
           def data

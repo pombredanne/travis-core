@@ -118,49 +118,9 @@ class CreateRequestsCommitsAndTasks < ActiveRecord::Migration
   end
 
   def self.down
-    # TODO complete this
-    #
-    # change_table :builds do |t|
-    #   t.text     :github_payload
-    #   t.string   :token
-
-    #   t.string   :commit
-    #   t.string   :ref
-    #   t.string   :branch
-    #   t.text     :message
-    #   t.string   :compare_url
-
-    #   t.datetime :committed_at
-    #   t.string   :committer_name
-    #   t.string   :committer_email
-    #   t.string   :author_name
-    #   t.string   :author_email
-
-    #   t.references :parent_id
-    #   t.integer  :status
-    #   t.text     :log, :default => ''
-    #   t.string   :worker
-
-    #   t.remove :commit_id
-    #   t.remove :request_id
-    # end
-
-    # migrate_table :commits, :to => :builds do |t|
-    #   t.copy :commit, :ref, :branch, :message, :compare_url, :committed_at,
-    #          :committer_name, :committer_email, :author_name, :author_email
-    # end
-
-    # migrate_table :requests, :to => :builds do |t|
-    #   t.copy :token, :payload, :to => [:token, :github_payload]
-    # end
-
-    # migrate_table :tasks, :to => :builds do |t|
-    #   t.copy :status, :log
-    #   t.copy :owner_id, :to => :parent_id
-    # end
-
-    # drop_table :commits
-    # drop_table :requests
+    # This has been in production for so long, I don't see why we would revert
+    # this without writing another migration.
+    raise ActiveRecord::IrreversibleMigration
   end
 end
 

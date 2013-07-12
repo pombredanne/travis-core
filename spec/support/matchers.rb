@@ -29,16 +29,6 @@ RSpec::Matchers.define :contain_recipients do |expected|
   end
 end
 
-# TODO this looks like a very weird matcher
-RSpec::Matchers.define :send_email_notification_on do |event|
-  match do |build|
-    dispatch =  lambda { Travis::Event.dispatch(event, build) }
-    dispatch.call
-    dispatch.should change(ActionMailer::Base.deliveries, :size).by(1)
-    ActionMailer::Base.deliveries.last
-  end
-end
-
 RSpec::Matchers.define :deliver_to do |expected|
   match do |email|
     actual = (email.to || []).map(&:to_s)

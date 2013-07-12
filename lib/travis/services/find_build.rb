@@ -7,12 +7,6 @@ module Travis
         preload(result) if result
       end
 
-      def final?
-        # TODO builds can be requeued, so finished builds are no more final
-        # result.try(:finished?)
-        false
-      end
-
       def updated_at
         max = all_resources.max_by(&:updated_at)
         max.updated_at if max.respond_to?(:updated_at)

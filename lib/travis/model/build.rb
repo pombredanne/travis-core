@@ -34,9 +34,6 @@ require 'simple_states'
 #                  final build result etc.
 #  * Messages    - helpers for evaluating human readable result messages
 #                  (e.g. "Still Failing")
-#  * Events      - helpers that are used by notification handlers (and that
-#                  TODO probably should be cleaned up and moved to
-#                  travis/notification)
 class Build < ActiveRecord::Base
   autoload :Denormalize,   'travis/model/build/denormalize'
   autoload :Matrix,        'travis/model/build/matrix'

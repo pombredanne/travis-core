@@ -72,14 +72,9 @@ module Travis
             end
 
             def with_github(&block)
-              # TODO in_parallel should return the block's result in a future version
-              result = nil
               GH.with(:token => user.github_oauth_token) do
-                # GH.in_parallel do
-                  result = yield
-                # end
+                GH.in_parallel(&block)
               end
-              result
             end
 
             def fetch_and_filter

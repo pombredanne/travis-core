@@ -30,12 +30,6 @@ describe Travis::Logs::Services::Receive do
     log.parts.first.final.should be_false
   end
 
-  it 'sets the :final flag if the appended message contains the final log message part' do
-    data.update('log' => "some log.\n#{described_class::FINAL} result")
-    service.run
-    log.parts.first.final.should be_true
-  end
-
   it 'notifies observers' do
     Job::Test.stubs(:find).with(job.id).returns(job)
     job.expects(:notify).with(:log, _log: 'log', number: 1, final: false)

@@ -60,10 +60,6 @@ class User < ActiveRecord::Base
     synced_at.nil?
   end
 
-  def sync
-    Travis.run_service(:sync_user, self) # TODO remove once apps use the service
-  end
-
   def syncing?
     is_syncing?
   end

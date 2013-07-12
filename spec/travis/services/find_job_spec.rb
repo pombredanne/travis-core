@@ -32,18 +32,4 @@ describe Travis::Services::FindJob do
       service.updated_at.to_s.should == job.updated_at.to_s
     end
   end
-
-  # TODO jobs can be requeued, so finished jobs are no more final
-  #
-  # describe 'final?' do
-  #   it 'returns true if the job is finished' do
-  #     job.update_attributes!(state: :errored)
-  #     service.final?.should be_true
-  #   end
-
-  #   it 'returns false if the job is not finished' do
-  #     job.update_attributes!(state: :started)
-  #     service.final?.should be_false
-  #   end
-  # end
 end

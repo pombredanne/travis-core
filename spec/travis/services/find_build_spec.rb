@@ -41,18 +41,4 @@ describe Travis::Services::FindBuild do
       }.to_not raise_error
     end
   end
-
-  # TODO builds can be requeued, so finished builds are no more final
-  #
-  # describe 'final?' do
-  #   it 'returns true if the build is finished' do
-  #     build.update_attributes!(:state => :errored)
-  #     service.final?.should be_true
-  #   end
-
-  #   it 'returns false if the build is not finished' do
-  #     build.update_attributes!(:state => :started)
-  #     service.final?.should be_false
-  #   end
-  # end
 end

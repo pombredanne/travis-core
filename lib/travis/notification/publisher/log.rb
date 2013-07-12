@@ -24,17 +24,11 @@ module Travis
         end
 
         def ignore?(event)
-          event_received?(event) && !sync_or_request_handler?(event)
+          event_received?(event)
         end
 
         def event_received?(event)
           event[:event].end_with?("received")
-        end
-
-        # TODO why do ignore these again?
-        def sync_or_request_handler?(event)
-          msg = event[:message]
-          msg && msg =~ /Travis::Hub::Handler::(Sync|Request)#handle/
         end
       end
     end

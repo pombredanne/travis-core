@@ -7,12 +7,6 @@ module Travis
         preload(result) if result
       end
 
-      def final?
-        # TODO jobs can be requeued, so finished jobs are no more final
-        # result.try(:finished?)
-        false
-      end
-
       def updated_at
         result.try(:updated_at)
       end

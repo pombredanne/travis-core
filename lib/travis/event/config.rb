@@ -17,9 +17,7 @@ module Travis
       end
 
       def enabled?(key)
-        return !!notifications[key] if notifications.has_key?(key) # TODO this seems inconsistent. what if email: { disabled: true }
-        [:disabled, :disable].each { |key| return !notifications[key] if notifications.has_key?(key) } # TODO deprecate disabled and disable
-        true
+        notifications.fetch(key, true)
       end
 
       def send_on?(type, event)
