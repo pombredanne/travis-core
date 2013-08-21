@@ -115,7 +115,8 @@ module Travis
             :encryption    => (Travis.env == 'development' ? { key: 'secret'*10 } : {}),
             :sync          => { :organizations => { :repositories_limit => 1000 } },
             :states_cache  => { :memcached_servers => 'localhost:11211' },
-            :sentry        => { }
+            :sentry        => { },
+            :metrics       => { :report => true }
 
     default :_access => [:key]
 
