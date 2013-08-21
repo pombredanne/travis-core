@@ -9,7 +9,7 @@ module Travis
       attr_accessor :publishers
 
       def setup
-        Travis::Instrumentation.setup
+        Travis::Instrumentation.setup if Travis.config.metrics.report
         publishers << Publisher::Log.new
         publishers << Publisher::Redis.new if Travis::Features.feature_active?(:notifications_publisher_redis)
       end
