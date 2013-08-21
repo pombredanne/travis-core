@@ -121,9 +121,7 @@ module Travis
     default :_access => [:key]
 
     def initialize(data = nil, *args)
-      p data
       data = self.class.normalize(data || self.class.load_env || self.class.load_file || {})
-      p data
       super
     end
 
