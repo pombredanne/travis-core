@@ -1,6 +1,5 @@
 require 'travis/support'
 require 'travis_core/version'
-require 'gh'
 require 'pusher'
 require 'travis/redis_pool'
 

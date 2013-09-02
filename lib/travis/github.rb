@@ -1,3 +1,6 @@
+require 'gh'
+require 'core_ext/hash/compact'
+
 module Travis
   module Github
     autoload :Services, 'travis/github/services'
@@ -10,7 +13,7 @@ module Travis
           user_agent:     "Travis-CI/#{TravisCore::VERSION} GH/#{GH::VERSION}",
           origin:         Travis.config.host,
           api_url:        Travis.config.github.api_url,
-          ssl:            Travis.config.ssl.merge(Travis.config.github.ssl || {}).compact
+          ssl:            Travis.config.ssl.merge(Travis.config.github.ssl || {}).to_hash.compact
         )
       end
 
