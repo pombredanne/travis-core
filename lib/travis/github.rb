@@ -10,7 +10,7 @@ module Travis
           user_agent:     "Travis-CI/#{TravisCore::VERSION} GH/#{GH::VERSION}",
           origin:         Travis.config.host,
           api_url:        Travis.config.github.api_url,
-          ssl:            Travis.config.github.ssl
+          ssl:            Travis.config.ssl.merge(Travis.config.github.ssl || {}).compact
         )
       end
 
