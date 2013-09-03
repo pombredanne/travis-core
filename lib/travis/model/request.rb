@@ -53,7 +53,7 @@ class Request < ActiveRecord::Base
   end
 
   def config_url
-    "https://api.github.com/repos/#{repository.slug}/contents/.travis.yml?ref=#{commit.commit}"
+    GH.full_url("repos/#{repository.slug}/contents/.travis.yml?ref=#{commit.commit}").to_s
   end
 
   def same_repo_pull_request?
