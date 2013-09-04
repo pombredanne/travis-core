@@ -54,11 +54,7 @@ module Travis
           end
 
           def authenticated(&block)
-            GH.with(http_options, &block)
-          end
-
-          def http_options
-            super.merge(token: params[:token])
+            GH.with(token: params[:token], &block)
           end
 
           Instruments::Task.attach_to(self)
