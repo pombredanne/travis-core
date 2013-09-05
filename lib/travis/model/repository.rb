@@ -104,7 +104,11 @@ class Repository < ActiveRecord::Base
   end
 
   def source_url
-    private? ? "git@#{source_host}:#{slug}.git": "git://#{source_host}/#{slug}.git"
+    (private? || private_mode?) ? "git@#{source_host}:#{slug}.git": "git://#{source_host}/#{slug}.git"
+  end
+
+  def private_mode?
+    source_host != 'github.com'
   end
 
   def source_host
