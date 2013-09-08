@@ -111,8 +111,8 @@ module Travis
           def request(method, url, params = nil, headers = nil, &block)
             http.send(*[method, url, params, headers].compact, &block)
           rescue Faraday::Error => e
-            puts "Exception while trying to #{method.inspect}: #{source_url}:"
-            puts e.message, e.backtrace
+            Travis.logger.error "Exception while trying to #{method.inspect}: #{source_url}:"
+            Travis.logger.error e.message << e.backtrace.join("\n")
             raise e
           end
 
@@ -136,7 +136,7 @@ module Travis
           rescue => e
             count ||= 0
             if times > (count += 1)
-              puts "[#{header}] retry #{count} because: #{e.message}"
+              Travis.logger.warn "[#{header}] retry #{count} because: #{e.message}"
               Travis::Instrumentation.meter("#{self.class.name.underscore.gsub("/", ".")}.retries.#{header}")
               sleep count * 3 unless params[:no_sleep]
               retry

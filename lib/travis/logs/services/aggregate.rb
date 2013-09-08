@@ -52,7 +52,7 @@ module Travis
           def notify(id)
             Log.find(id).notify('aggregated')
           rescue ActiveRecord::RecordNotFound
-            puts "[warn] could not find a log with the id #{id}"
+            Travis.logger.error "[warn] could not find a log with the id #{id}"
           end
 
           def aggregateable_ids
@@ -70,7 +70,6 @@ module Travis
           def transaction(&block)
             ActiveRecord::Base.transaction(&block)
           rescue ActiveRecord::ActiveRecordError => e
-            # puts e.message, e.backtrace
             Travis::Exceptions.handle(e)
           end
 
