@@ -58,13 +58,15 @@ describe Travis::Api::V0::Worker::Job::Test do
         'id' => 1,
         'slug' => 'svenfuchs/minimal',
         'source_url' => 'git://github.com/svenfuchs/minimal.git',
+        'api_url' => 'https://api.github.com/repos/svenfuchs/minimal',
         'last_build_id' => 1,
         'last_build_started_at' => json_format_time(Time.now.utc - 1.minute),
         'last_build_finished_at' => json_format_time(Time.now.utc),
         'last_build_number' => 2,
         'last_build_duration' => 60,
         'last_build_state' => 'passed',
-        'description' => 'the repo description'
+        'description' => 'the repo description',
+        'github_id' => 549743
       }
     end
   end
@@ -134,13 +136,15 @@ describe Travis::Api::V0::Worker::Job::Test do
         'id' => 1,
         'slug' => 'svenfuchs/minimal',
         'source_url' => 'git://github.com/svenfuchs/minimal.git',
+        'api_url' => 'https://api.github.com/repos/svenfuchs/minimal',
         'last_build_id' => 1,
         'last_build_started_at' => json_format_time(Time.now.utc - 1.minute),
         'last_build_finished_at' => json_format_time(Time.now.utc),
         'last_build_number' => 2,
         'last_build_duration' => 60,
         'last_build_state' => 'passed',
-        'description' => 'the repo description'
+        'description' => 'the repo description',
+        'github_id' => 549743
       }
     end
   end

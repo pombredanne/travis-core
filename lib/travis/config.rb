@@ -95,7 +95,7 @@ module Travis
             :pusher        => { :app_id => 'app-id', :key => 'key', :secret => 'secret' },
             :sidekiq       => { :namespace => 'sidekiq', :pool_size => 1 },
             :smtp          => {},
-            :github        => { :token => 'travisbot-token' },
+            :github        => { :api_url => 'https://api.github.com', :token => 'travisbot-token' },
             :async         => {},
             :notifications => [], # TODO rename to event.handlers
             :queues        => [],
@@ -108,7 +108,6 @@ module Travis
             :roles         => {},
             :archive       => {},
             :ssl           => {},
-            :sponsors      => { :platinum => [], :gold => [], :workers => {} },
             :redis         => { :url => 'redis://localhost:6379' },
             :repository_filter => { :include => [/^rails\/rails/], :exclude => [/\/rails$/] },
             :encryption    => (Travis.env == 'development' ? { key: 'secret'*10 } : {}),

@@ -5,6 +5,14 @@ module Travis
 
       register :cancel_build
 
+      attr_reader :source
+
+      def initialize(*)
+        super
+
+        @source = params.delete(:source) || 'unknown'
+      end
+
       def run
         cancel if can_cancel?
       end
@@ -20,6 +28,20 @@ module Travis
 
       def cancel
         build.cancel!
+        publish!
+      end
+
+      def publish!
+        # TODO: I think that instead of keeping publish logic in both cancel build
+        #       and cancel job services, we could call cancel_job service for each job
+        #       in the matrix, which would put build in canceled state, even without calling
+        #       cancel! on build explicitly. This may be a better way to handle cancelling
+        #       build
+        build.matrix.each do |job|
+          Travis.logger.info("Publishing cancel_job message to worker.commands queue for Job##{job.id}")
+          publisher.publish(type: 'cancel_job', job_id: job.id, source: source)
+        end
+
       end
 
       def can_cancel?
@@ -32,6 +54,10 @@ module Travis
 
       def build
         @build ||= run_service(:find_build, params)
+      end
+
+      def publisher
+        Travis::Amqp::FanoutPublisher.new('worker.commands')
       end
 
       class Instrument < Notification::Instrument

@@ -3,7 +3,7 @@ require 'active_support/core_ext/numeric/time'
 module Travis
   module Testing
     module Stubs
-      autoload :Stub, 'travis/testing/stubs/stub'
+      require 'travis/testing/stubs/stub'
 
       class << self
         include Stub
@@ -24,6 +24,7 @@ module Travis
             let(:url)           { stub_url          }
             let(:broadcast)     { stub_broadcast    }
             let(:travis_token)  { stub_travis_token }
+            let(:cache)         { stub_cache        }
           end
         end
       end
@@ -40,6 +41,7 @@ module Travis
           description: 'the repo description',
           url: 'http://github.com/svenfuchs/minimal',
           source_url: 'git://github.com/svenfuchs/minimal.git',
+          api_url: 'https://api.github.com/repos/svenfuchs/minimal',
           key: stub_key,
           admin: stub_user,
           active: true,
@@ -52,7 +54,8 @@ module Travis
           last_build_state: :passed,
           last_build_duration: 60,
           owner: nil,
-          github_language: 'ruby'
+          github_language: 'ruby',
+          github_id: 549743
         )
       end
       alias stub_repository stub_repo
@@ -158,7 +161,6 @@ module Travis
           allow_failure: false,
           started_at: Time.now.utc - 60,
           finished_at: Time.now.utc,
-          sponsor: { 'name' => 'Railslove', 'url' => 'http://railslove.de' },
           worker: 'ruby3.worker.travis-ci.org:travis-ruby-4',
           tags: 'tag-a,tag-b',
           log_content: log.content
@@ -261,6 +263,16 @@ module Travis
           id: 1,
           user: stub_user,
           token: 'super secret'
+        )
+      end
+
+      def stub_cache(attributes = {})
+        Stubs.stub 'cache', attributes.reverse_merge(
+          repository: stub_repository,
+          size: 1000,
+          slug: 'cache',
+          branch: 'master',
+          last_modified: Time.at(0).utc
         )
       end
     end

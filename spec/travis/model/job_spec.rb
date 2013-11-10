@@ -54,22 +54,6 @@ describe Job do
     end
   end
 
-  describe 'tagging' do
-    let(:job) { Factory.create(:test) }
-
-    before :each do
-      Job::Tagging.stubs(:rules).returns [
-        { 'tag' => 'rake_not_bundled', 'pattern' => 'rake is not part of the bundle.' }
-      ]
-    end
-
-    xit 'should tag a job its log contains a particular string' do
-      job.log.update_attributes!(content: 'rake is not part of the bundle')
-      job.finish!
-      job.reload.tags.should == "rake_not_bundled"
-    end
-  end
-
   describe 'obfuscated config' do
     it 'handles nil env' do
       job = Job.new(repository: Factory(:repository))
@@ -122,15 +106,30 @@ describe Job do
       }
     end
 
-    it 'removes addons config' do
+    it 'removes addons config if it is not a hash' do
       job = Job.new(repository: Factory(:repository))
       config = { rvm: '1.8.7',
-                 addons: { sauce_connect: true },
+                 addons: "foo",
+               }
+      job.config = config
+
+      job.obfuscated_config.should == {
+        rvm: '1.8.7'
+      }
+    end
+
+    it 'removes addons config which is not whitelisted' do
+      job = Job.new(repository: Factory(:repository))
+      config = { rvm: '1.8.7',
+                 addons: { sauce_connect: true, firefox: '22.0' },
                }
       job.config = config
 
       job.obfuscated_config.should == {
         rvm: '1.8.7',
+        addons: {
+          firefox: '22.0'
+        }
       }
     end
 
@@ -303,20 +302,34 @@ describe Job do
         job
       end
 
-
-      it 'removes addons config' do
+      it 'removes addons if it is not a hash' do
         config = { rvm: '1.8.7',
-                   addons: {
-                     sauce_connect: {
-                       username: 'johndoe',
-                       access_key: job.repository.key.secure.encrypt('foobar')
-                     }
-                   }
+                   addons: []
                  }
         job.config = config
 
         job.decrypted_config.should == {
           rvm: '1.8.7'
+        }
+      end
+
+      it 'removes addons items which are not whitelisted' do
+        config = { rvm: '1.8.7',
+                   addons: {
+                     sauce_connect: {
+                       username: 'johndoe',
+                       access_key: job.repository.key.secure.encrypt('foobar')
+                     },
+                     firefox: '22.0'
+                   }
+                 }
+        job.config = config
+
+        job.decrypted_config.should == {
+          rvm: '1.8.7',
+          addons: {
+            firefox: '22.0'
+          }
         }
       end
     end

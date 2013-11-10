@@ -4,7 +4,7 @@ module Travis
       module Webhook
         class Build
           class Finished < Build
-            autoload :Job, 'travis/api/v1/webhook/build/finished/job'
+            require 'travis/api/v1/webhook/build/finished/job'
 
             include Formats
 
@@ -31,7 +31,8 @@ module Travis
                 'author_email' => commit.author_email,
                 'committer_name' => commit.committer_name,
                 'committer_email' => commit.committer_email,
-                'matrix' => build.matrix.map { |job| Job.new(job, options).data }
+                'matrix' => build.matrix.map { |job| Job.new(job, options).data },
+                'type'  => build.event_type
               }
             end
 

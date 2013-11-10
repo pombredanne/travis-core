@@ -19,7 +19,7 @@ describe Travis::Services::UpdateJob do
       publisher = mock('publisher')
       service.stubs(:publisher).returns(publisher)
 
-      publisher.expects(:publish).with(type: 'cancel_job', job_id: job.id)
+      publisher.expects(:publish).with(type: 'cancel_job', job_id: job.id, source: 'update_job_service')
 
       service.cancel_job_in_worker
     end
@@ -168,7 +168,7 @@ describe Travis::Services::UpdateJob do
 
     it 'resets the job worker name' do
       service.run
-      job.reload.worker.should == ''
+      job.reload.worker.should be_nil
     end
 
     it 'resets the build state to started' do

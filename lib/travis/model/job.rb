@@ -9,10 +9,9 @@ require 'active_support/core_ext/hash/deep_dup'
 #    build matrix) and executes a test suite with parameters defined in the
 #    configuration.
 class Job < Travis::Model
-  autoload :Queue,     'travis/model/job/queue'
-  autoload :Sponsors,  'travis/model/job/sponsors'
-  autoload :Tagging,   'travis/model/job/tagging'
-  autoload :Test,      'travis/model/job/test'
+  require 'travis/model/job/queue'
+  require 'travis/model/job/test'
+  require 'travis/model/env_helpers'
 
   class << self
     # what we return from the json api
@@ -98,7 +97,7 @@ class Job < Travis::Model
 
   def obfuscated_config
     normalize_config(config).deep_dup.tap do |config|
-      config.delete(:addons)
+      delete_addons(config)
       config.delete(:source_key)
       if config[:env]
         obfuscated_env = process_env(config[:env]) { |env| obfuscate_env(env) }
@@ -119,7 +118,7 @@ class Job < Travis::Model
         if addons_enabled?
           config[:addons] = decrypt_addons(config[:addons])
         else
-          config.delete(:addons)
+          delete_addons(config)
         end
       end
     end
@@ -132,15 +131,7 @@ class Job < Travis::Model
     return false unless config.respond_to?(:to_hash)
     config = config.to_hash.symbolize_keys
     Build.matrix_keys_for(config).map do |key|
-      if Travis::Features.feature_inactive?(:global_env_in_config) && key.to_sym == :env && self.config[:_global_env]
-        # TODO: remove this part when we're sure that all workers
-        #       are capable of handling global_env
-        job_env    = Array(self.config[key.to_sym])
-        config_env = Array(config[key])
-        (job_env - self.config[:_global_env]) == config_env
-      else
-        self.config[key.to_sym] == config[key] || commit.branch == config[key]
-      end
+      self.config[key.to_sym] == config[key] || commit.branch == config[key]
     end.inject(:&)
   end
 
@@ -150,6 +141,18 @@ class Job < Travis::Model
   end
 
   private
+
+    def whitelisted_addons
+      [:firefox, :hosts]
+    end
+
+    def delete_addons(config)
+      if config[:addons].is_a?(Hash)
+        config[:addons].keep_if { |key, value| whitelisted_addons.include? key.to_sym }
+      else
+        config.delete(:addons)
+      end
+    end
 
     def normalize_config(config)
       config = config ? config.deep_symbolize_keys : {}

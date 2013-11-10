@@ -186,6 +186,10 @@
         vertical-align: middle;
       }
 
+      #build .build-message a {
+        text-decoration: underline;
+      }
+
       .time {
         font-weight: normal;
         font-size: 12px;
@@ -327,7 +331,7 @@
               </tr>
               <tr>
                 <td>&nbsp;</td>
-                <td colspan="2" class="grey"><%= @commit.message.gsub("\n", "<br/>").html_safe %></td>
+                <td colspan="2" class="grey"><%= html_escape(@commit.message).gsub("\n", "<br/>").html_safe %></td>
               </tr>
               </tbody>
           </table>

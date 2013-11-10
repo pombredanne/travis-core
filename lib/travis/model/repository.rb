@@ -11,7 +11,7 @@ require 'active_record'
 # A repository also has a ServiceHook that can be used to de/activate service
 # hooks on Github.
 class Repository < Travis::Model
-  autoload :StatusImage, 'travis/model/repository/status_image'
+  require 'travis/model/repository/status_image'
 
   has_many :commits, dependent: :delete_all
   has_many :requests, dependent: :delete_all
@@ -103,33 +103,30 @@ class Repository < Travis::Model
     @slug ||= [owner_name, name].join('/')
   end
 
+  def api_url
+    "#{Travis.config.github.api_url}/repos/#{slug}"
+  end
+
   def source_url
     private? ? "git@github.com:#{slug}.git": "git://github.com/#{slug}.git"
   end
 
   def branches
-    if Build.column_names.include?('branch')
-      self.class.connection.select_values %(
-        SELECT DISTINCT ON (branch) branch
-        FROM   builds
-        WHERE  builds.repository_id = #{id}
-        ORDER  BY branch DESC
-        LIMIT  25
-      )
-    else
-      self.class.connection.select_values %(
-        SELECT DISTINCT ON (commits.branch) branch
-        FROM   builds
-        JOIN   commits ON builds.commit_id = commits.id
-        WHERE  builds.repository_id = #{id}
-        ORDER  BY commits.branch DESC
-        LIMIT  25
-      )
-    end
+    self.class.connection.select_values %(
+      SELECT DISTINCT ON (branch) branch
+      FROM   builds
+      WHERE  builds.repository_id = #{id}
+      ORDER  BY branch DESC
+      LIMIT  25
+    )
   end
 
   def last_completed_build(branch = nil)
     builds.pushes.last_build_on(state: [:passed, :failed, :errored], branch: branch)
+  end
+
+  def last_build_on(branch)
+    builds.pushes.last_build_on(branch: branch)
   end
 
   def build_status(branch)
@@ -141,24 +138,13 @@ class Repository < Travis::Model
   end
 
   def last_finished_builds_by_branches_ids
-    if Build.column_names.include?('branch')
-      self.class.connection.select_values %(
-        SELECT DISTINCT ON (branch) builds.id
-        FROM   builds
-        WHERE  builds.repository_id = #{id}
-        ORDER  BY branch, finished_at DESC
-        LIMIT  25
-      )
-    else
-      self.class.connection.select_values %(
-        SELECT DISTINCT ON (commits.branch) builds.id
-        FROM   builds
-        JOIN   commits ON builds.commit_id = commits.id
-        WHERE  builds.repository_id = #{id}
-        ORDER  BY commits.branch, finished_at DESC
-        LIMIT  25
-      )
-    end
+    self.class.connection.select_values %(
+      SELECT DISTINCT ON (branch) builds.id
+      FROM   builds
+      WHERE  builds.repository_id = #{id}
+      ORDER  BY branch, finished_at DESC
+      LIMIT  25
+    )
   end
 
   def regenerate_key!
