@@ -1,3 +1,6 @@
+require 'travis/support/instrumentation'
+require 'travis/services/base'
+
 module Travis
   module Services
     class ResetModel < Base
@@ -6,13 +9,13 @@ module Travis
       register :reset_model
 
       def run
-        reset if target && accept?
+        reset if current_user && target && accept?
         true
       end
       instrument :run
 
       def accept?
-        permission? && resetable?
+        current_user && permission? && resetable?
       end
 
       def messages
@@ -34,6 +37,8 @@ module Travis
       private
 
         def reset
+          # target may have been retrieved with a :join query, so we need to reset the readonly status
+          target.send(:instance_variable_set, :@readonly, false)
           target.reset!(reset_matrix: type == :build)
         end
 
@@ -67,4 +72,3 @@ module Travis
     end
   end
 end
-

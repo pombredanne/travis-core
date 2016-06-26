@@ -1,4 +1,6 @@
 require 'active_support/core_ext/hash/except'
+require 'travis/support/instrumentation'
+require 'travis/services/base'
 
 module Travis
   module Services
@@ -7,7 +9,7 @@ module Travis
 
       register :update_job
 
-      EVENT = [:start, :finish, :reset]
+      EVENT = [:receive, :start, :finish, :reset]
 
       def run
         if job.canceled? && event != :reset
@@ -16,17 +18,15 @@ module Travis
           # the first one
           cancel_job_in_worker
         else
-          job.send(:"#{event}!", data.except(:id))
+          Metriks.timer("update_job.#{event}").time do
+            job.send(:"#{event}!", data.except(:id))
+          end
         end
       end
       instrument :run
 
       def job
         @job ||= Job::Test.find(data[:id])
-      end
-
-      def event
-        params[:event]
       end
 
       def data

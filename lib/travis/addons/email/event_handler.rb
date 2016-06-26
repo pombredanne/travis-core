@@ -1,3 +1,7 @@
+require 'travis/addons/email/instruments'
+require 'travis/event/handler'
+require 'travis/model/broadcast'
+
 module Travis
   module Addons
     module Email
@@ -6,7 +10,7 @@ module Travis
       class EventHandler < Event::Handler
         API_VERSION = 'v2'
 
-        EVENTS = 'build:finished'
+        EVENTS = ['build:finished', 'build:canceled']
 
         def handle?
           !pull_request? && config.enabled?(:email) && config.send_on_finished_for?(:email) && recipients.present?
@@ -38,7 +42,11 @@ module Travis
           end
 
           def default_recipients
-            [commit['committer_email'], commit['author_email'], repository['owner_email']]
+            recipients = object.repository.users.map {|u| u.emails.map(&:email)}.flatten
+            recipients.keep_if do |r|
+              r == object.commit.author_email or
+              r == object.commit.committer_email
+            end
           end
 
           Instruments::EventHandler.attach_to(self)

@@ -3,6 +3,18 @@ require 'spec_helper'
 describe Job do
   include Support::ActiveRecord
 
+  describe '.result' do
+    it 'returns 1 for failed builds' do
+      job = Factory.build(:test, state: :failed)
+      job.result.should == 1
+    end
+
+    it 'returns 0 for passed builds' do
+      job = Factory.build(:test, state: :passed)
+      job.result.should == 0
+    end
+  end
+
   describe ".queued" do
     let(:jobs) { [Factory.create(:test), Factory.create(:test), Factory.create(:test)] }
 
@@ -118,7 +130,7 @@ describe Job do
       }
     end
 
-    it 'removes addons config which is not whitelisted' do
+    it 'removes addons items which are not whitelisted' do
       job = Job.new(repository: Factory(:repository))
       config = { rvm: '1.8.7',
                  addons: { sauce_connect: true, firefox: '22.0' },
@@ -144,6 +156,7 @@ describe Job do
         rvm: '1.8.7',
       }
     end
+
     context 'when job has secure env disabled' do
       let :job do
         job = Job.new(repository: Factory(:repository))
@@ -320,7 +333,12 @@ describe Job do
                        username: 'johndoe',
                        access_key: job.repository.key.secure.encrypt('foobar')
                      },
-                     firefox: '22.0'
+                     firefox: '22.0',
+                     mariadb: '10.1',
+                     postgresql: '9.3',
+                     hosts: %w(travis.dev),
+                     apt_packages: %w(curl git),
+                     apt_sources: %w(deadsnakes)
                    }
                  }
         job.config = config
@@ -328,7 +346,12 @@ describe Job do
         job.decrypted_config.should == {
           rvm: '1.8.7',
           addons: {
-            firefox: '22.0'
+            firefox: '22.0',
+            mariadb: '10.1',
+            postgresql: '9.3',
+            hosts: %w(travis.dev),
+            apt_packages: %w(curl git),
+            apt_sources: %w(deadsnakes)
           }
         }
       end
@@ -412,6 +435,22 @@ describe Job do
           }
         }
       end
+
+      it 'removes addons config if it is an array and deploy is present' do
+        config = { rvm: '1.8.7',
+                   addons: ["foo"],
+                   deploy: { foo: 'bar'}
+                 }
+        job.config = config
+
+        job.decrypted_config.should == {
+          rvm: '1.8.7',
+          addons: {
+            deploy: { foo: 'bar' }
+          }
+        }
+      end
+
     end
   end
 

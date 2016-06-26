@@ -2,27 +2,24 @@ require 'spec_helper'
 require 'active_support/core_ext/hash/slice'
 
 describe Travis::Config do
-  let(:config) { Travis::Config.new }
+  let(:config) { Travis::Config.load(:files, :env, :heroku, :docker) }
 
-  after :each do
-    ENV.delete('DATABASE_URL')
-    ENV.delete('travis_config')
-    Travis.instance_variable_set(:@config, nil)
-  end
-
-  describe 'Hashr behaviour' do
-    it 'is a Hashr instance' do
-      config.should be_kind_of(Hashr)
+  describe 'endpoints' do
+    it 'returns an object even without endpoints entry' do
+      config.endpoints.foo.should be_nil
     end
 
-    it 'returns Hashr instances on subkeys' do
-      ENV['travis_config'] = YAML.dump('redis' => { 'url' => 'redis://localhost:6379' })
-      config.redis.should be_kind_of(Hashr)
+    it 'returns endpoints if it is set' do
+      ENV['travis_config'] = YAML.dump('endpoints' => { 'ssh_key' => true })
+      config.endpoints.ssh_key.should be_true
     end
 
-    it 'returns Hashr instances on subkeys that were set to Ruby Hashes' do
-      config.foo = { :bar => { :baz => 'baz' } }
-      config.foo.bar.should be_kind_of(Hashr)
+    it 'allows to set keys on enpoints when it is nil' do
+      config.endpoints.foo.should be_nil
+
+      config.endpoints.foo = true
+
+      config.endpoints.foo.should be_true
     end
   end
 
@@ -72,60 +69,95 @@ describe Travis::Config do
         :adapter => 'postgresql',
         :database => 'travis_test',
         :encoding => 'unicode',
-        :min_messages => 'warning'
+        :min_messages => 'warning',
+        :variables => { :statement_timeout => 10000 }
       }
     end
   end
 
-  describe 'using DATABASE_URL for database configuration if present' do
-    it 'works when given a url with a port' do
-      ENV['DATABASE_URL'] = 'postgres://username:password@hostname:port/database'
+  describe 'resource urls' do
+    describe 'with a TRAVIS_DATABASE_URL set' do
+      before { ENV['TRAVIS_DATABASE_URL'] = 'postgres://username:password@host:1234/database' }
+      after  { ENV.delete('TRAVIS_DATABASE_URL') }
 
-      config.database.to_hash.slice(:adapter, :host, :port, :database, :username, :password).should == {
-        :adapter => 'postgresql',
-        :host => 'hostname',
-        :port => 'port',
-        :database => 'database',
-        :username => 'username',
-        :password => 'password'
-      }
+      it { config.database.username.should == 'username' }
+      it { config.database.password.should == 'password' }
+      it { config.database.host.should == 'host' }
+      it { config.database.port.should == 1234 }
+      it { config.database.database.should == 'database' }
+      it { config.database.encoding.should == 'unicode' }
     end
 
-    it 'works when given a url without a port' do
-      ENV['DATABASE_URL'] = 'postgres://username:password@hostname/database'
+    describe 'with a DATABASE_URL set' do
+      before { ENV['DATABASE_URL'] = 'postgres://username:password@host:1234/database' }
+      after  { ENV.delete('DATABASE_URL') }
 
-      config.database.to_hash.slice(:adapter, :host, :port, :database, :username, :password).should == {
-        :adapter => 'postgresql',
-        :host => 'hostname',
-        :database => 'database',
-        :username => 'username',
-        :password => 'password'
-      }
-    end
-  end
-
-  describe 'the example config file' do
-    let(:data)    { {} }
-    before(:each) { Travis::Config.stubs(:load_file).returns(data) }
-
-    it 'can access pusher' do
-      lambda { config.pusher.key }.should_not raise_error
+      it { config.database.username.should == 'username' }
+      it { config.database.password.should == 'password' }
+      it { config.database.host.should == 'host' }
+      it { config.database.port.should == 1234 }
+      it { config.database.database.should == 'database' }
+      it { config.database.encoding.should == 'unicode' }
     end
 
-    it 'can access all keys recursively' do
-      nested_access = lambda do |config, data|
-        data.keys.each do |key|
-          lambda { config.send(key) }.should_not raise_error
-          nested_access.call(config.send(key), data[key]) if data[key].is_a?(Hash)
-        end
-      end
-      nested_access.call(config, data)
-    end
-  end
+    describe 'with a TRAVIS_LOGS_DATABASE_URL set' do
+      before { ENV['TRAVIS_LOGS_DATABASE_URL'] = 'postgres://username:password@host:1234/database' }
+      after  { ENV.delete('TRAVIS_LOGS_DATABASE_URL') }
 
-  it 'deep symbolizes arrays, too' do
-    config = Travis::Config.new('queues' => [{ 'slug' => 'rails/rails', 'queue' => 'rails' }])
-    config.queues.first.values_at(:slug, :queue).should == ['rails/rails', 'rails']
+      it { config.logs_database.username.should == 'username' }
+      it { config.logs_database.password.should == 'password' }
+      it { config.logs_database.host.should == 'host' }
+      it { config.logs_database.port.should == 1234 }
+      it { config.logs_database.database.should == 'database' }
+      it { config.logs_database.encoding.should == 'unicode' }
+    end
+
+    describe 'with a LOGS_DATABASE_URL set' do
+      before { ENV['LOGS_DATABASE_URL'] = 'postgres://username:password@host:1234/database' }
+      after  { ENV.delete('LOGS_DATABASE_URL') }
+
+      it { config.logs_database.username.should == 'username' }
+      it { config.logs_database.password.should == 'password' }
+      it { config.logs_database.host.should == 'host' }
+      it { config.logs_database.port.should == 1234 }
+      it { config.logs_database.database.should == 'database' }
+      it { config.logs_database.encoding.should == 'unicode' }
+    end
+
+    describe 'with a TRAVIS_RABBITMQ_URL set' do
+      before { ENV['TRAVIS_RABBITMQ_URL'] = 'amqp://username:password@host:1234/vhost' }
+      after  { ENV.delete('TRAVIS_RABBITMQ_URL') }
+
+      it { config.amqp.username.should == 'username' }
+      it { config.amqp.password.should == 'password' }
+      it { config.amqp.host.should == 'host' }
+      it { config.amqp.port.should == 1234 }
+      it { config.amqp.vhost.should == 'vhost' }
+    end
+
+    describe 'with a RABBITMQ_URL set' do
+      before { ENV['RABBITMQ_URL'] = 'amqp://username:password@host:1234/vhost' }
+      after  { ENV.delete('RABBITMQ_URL') }
+
+      it { config.amqp.username.should == 'username' }
+      it { config.amqp.password.should == 'password' }
+      it { config.amqp.host.should == 'host' }
+      it { config.amqp.port.should == 1234 }
+      it { config.amqp.vhost.should == 'vhost' }
+    end
+
+    describe 'with a TRAVIS_REDIS_URL set' do
+      before { ENV['TRAVIS_REDIS_URL'] = 'redis://username:password@host:1234' }
+      after  { ENV.delete('TRAVIS_REDIS_URL') }
+
+      it { config.redis.url.should == 'redis://username:password@host:1234' }
+    end
+
+    describe 'with a REDIS_URL set' do
+      before { ENV['REDIS_URL'] = 'redis://username:password@host:1234' }
+      after  { ENV.delete('REDIS_URL') }
+
+      it { config.redis.url.should == 'redis://username:password@host:1234' }
+    end
   end
 end
-

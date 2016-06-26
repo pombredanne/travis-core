@@ -36,6 +36,14 @@ describe Repository::StatusImage do
 
       image.result.should == :passing
     end
+
+    it 'handles cache failures gracefully' do
+      image = described_class.new(repo, nil)
+      cache.expects(:fetch_state).raises(Travis::StatesCache::CacheError)
+      expect {
+        image.result.should == :passing
+      }.to_not raise_error
+    end
   end
 
   describe 'given no branch' do
@@ -54,6 +62,12 @@ describe Repository::StatusImage do
       build.update_attributes(state: :errored)
       image = described_class.new(repo, nil)
       image.result.should == :error
+    end
+
+    it 'returns :canceled if the status of the last finished build is canceled' do
+      build.update_attributes(state: 'canceled')
+      image = described_class.new(repo, nil)
+      image.result.should == :canceled
     end
 
     it 'returns :unknown if the status of the last finished build is unknown' do
@@ -80,6 +94,12 @@ describe Repository::StatusImage do
       build.update_attributes(state: :errored, branch: 'develop')
       image = described_class.new(repo, 'develop')
       image.result.should == :error
+    end
+
+    it 'returns :canceled if the last build on that branch was canceled' do
+      build.update_attributes(state: :canceled, branch: 'develop')
+      image = described_class.new(repo, 'develop')
+      image.result.should == :canceled
     end
   end
 end

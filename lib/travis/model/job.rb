@@ -1,5 +1,6 @@
-require 'active_record'
+require 'travis/model'
 require 'active_support/core_ext/hash/deep_dup'
+require 'travis/model/build/config/language'
 
 # Job models a unit of work that is run on a remote worker.
 #
@@ -12,6 +13,17 @@ class Job < Travis::Model
   require 'travis/model/job/queue'
   require 'travis/model/job/test'
   require 'travis/model/env_helpers'
+
+  WHITELISTED_ADDONS = %w(
+    apt
+    apt_packages
+    apt_sources
+    firefox
+    hosts
+    mariadb
+    postgresql
+    ssh_known_hosts
+  ).freeze
 
   class << self
     # what we return from the json api
@@ -30,7 +42,7 @@ class Job < Travis::Model
 
     # what already is queued or started
     def running(queue = nil)
-      scope = where(state: [:queued, :started]).order('jobs.id')
+      scope = where(state: [:queued, :received, :started]).order('jobs.id')
       scope = scope.where(queue: queue) if queue
       scope
     end
@@ -49,6 +61,7 @@ class Job < Travis::Model
 
   has_one    :log, dependent: :destroy
   has_many   :events, as: :source
+  has_many   :annotations, dependent: :destroy
 
   belongs_to :repository
   belongs_to :commit
@@ -83,12 +96,18 @@ class Job < Travis::Model
     if name == :cancel
       name = :cancel_job
     end
-    source.send(name, *args)
+    Metriks.timer("job.propagate.#{name}").time do
+      source.send(name, *args)
+    end
     true
   end
 
   def duration
     started_at && finished_at ? finished_at - started_at : nil
+  end
+
+  def ssh_key
+    config[:source_key]
   end
 
   def config=(config)
@@ -127,12 +146,11 @@ class Job < Travis::Model
     {}
   end
 
-  def matrix_config?(config)
-    return false unless config.respond_to?(:to_hash)
-    config = config.to_hash.symbolize_keys
-    Build.matrix_keys_for(config).map do |key|
-      self.config[key.to_sym] == config[key] || commit.branch == config[key]
-    end.inject(:&)
+  def matches_config?(other)
+    config = self.config.slice(*other.keys)
+    config = config.merge(branch: commit.branch) if other.key?(:branch) # TODO test this
+    return false if config.size == 0
+    config.all? { |key, value| value == other[key] || commit.branch == other[key] }
   end
 
   def log_content=(content)
@@ -140,15 +158,16 @@ class Job < Travis::Model
     log.update_attributes!(content: content, aggregated_at: Time.now)
   end
 
-  private
+  # compatibility, we still use result in webhooks
+  def result
+    state.try(:to_sym) == :passed ? 0 : 1
+  end
 
-    def whitelisted_addons
-      [:firefox, :hosts]
-    end
+  private
 
     def delete_addons(config)
       if config[:addons].is_a?(Hash)
-        config[:addons].keep_if { |key, value| whitelisted_addons.include? key.to_sym }
+        config[:addons].keep_if { |key, _| WHITELISTED_ADDONS.include? key.to_s }
       else
         config.delete(:addons)
       end
@@ -158,8 +177,12 @@ class Job < Travis::Model
       config = config ? config.deep_symbolize_keys : {}
 
       if config[:deploy]
-        config[:addons] ||= {}
-        config[:addons][:deploy] = config.delete(:deploy)
+        if config[:addons].is_a? Hash
+          config[:addons][:deploy] = config.delete(:deploy)
+        else
+          config.delete(:addons)
+          config[:addons] = { deploy: config.delete(:deploy) }
+        end
       end
 
       config

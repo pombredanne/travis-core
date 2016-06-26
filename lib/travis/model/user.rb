@@ -1,17 +1,17 @@
-require 'active_record'
 require 'gh'
+require 'travis/model'
 
 class User < Travis::Model
   require 'travis/model/user/oauth'
 
-  has_many :tokens
-  has_many :memberships
-  has_many :organizations, :through => :memberships
-  has_many :permissions
-  has_many :repositories, :through => :permissions
-  has_many :emails
+  has_many :tokens, dependent: :destroy
+  has_many :memberships, dependent: :destroy
+  has_many :organizations, through: :memberships
+  has_many :permissions, dependent: :destroy
+  has_many :repositories, through: :permissions
+  has_many :emails, dependent: :destroy
 
-  attr_accessible :name, :login, :email, :github_id, :github_oauth_token, :gravatar_id, :locale
+  attr_accessible :name, :login, :email, :github_id, :github_oauth_token, :gravatar_id, :locale, :education, :first_logged_in_at
 
   before_create :set_as_recent
   after_create :create_a_token
@@ -40,7 +40,11 @@ class User < Travis::Model
     end
 
     def with_github_token
-      where('github_oauth_token IS NOT NULL')
+      where("github_oauth_token IS NOT NULL and github_oauth_token != ''")
+    end
+
+    def with_email(email_address)
+      Email.where(email: email_address).first.try(:user)
     end
   end
 
@@ -120,6 +124,14 @@ class User < Travis::Model
 
   def avatar_url
     "https://0.gravatar.com/avatar/#{profile_image_hash}"
+  end
+
+  def inspect
+    if github_oauth_token
+      super.gsub(github_oauth_token, '[REDACTED]')
+    else
+      super
+    end
   end
 
   protected

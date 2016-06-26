@@ -1,7 +1,7 @@
-require 'active_record'
-require 'core_ext/active_record/base'
 require 'core_ext/hash/deep_symbolize_keys'
 require 'simple_states'
+require 'travis/model'
+require 'travis/services/next_build_number'
 
 # Build currently models a central but rather abstract domain entity: the thing
 # that is triggered by a Github request (service hook ping).
@@ -38,7 +38,9 @@ require 'simple_states'
 #                  TODO probably should be cleaned up and moved to
 #                  travis/notification)
 class Build < Travis::Model
+  require 'travis/model/build/config'
   require 'travis/model/build/denormalize'
+  require 'travis/model/build/update_branch'
   require 'travis/model/build/matrix'
   require 'travis/model/build/metrics'
   require 'travis/model/build/result_message'
@@ -46,7 +48,6 @@ class Build < Travis::Model
   require 'travis/model/env_helpers'
 
   include Matrix, States, SimpleStates
-  include Travis::Model::EnvHelpers
 
   belongs_to :commit
   belongs_to :request
@@ -62,8 +63,12 @@ class Build < Travis::Model
   delegate :same_repo_pull_request?, :to => :request
 
   class << self
-    def recent(options = {})
-      where('state IN (?)', state_names - [:created, :queued]).order(arel_table[:started_at].desc).paged(options)
+    def recent
+      where(state: ['failed', 'passed']).order('id DESC').limit(25)
+    end
+
+    def running
+      where(state: ['started']).order('started_at DESC')
     end
 
     def was_started
@@ -79,19 +84,25 @@ class Build < Travis::Model
     end
 
     def on_branch(branch)
-      pushes.where(branch.present? ? ['branch IN (?)', normalize_to_array(branch)] : [])
+      api_and_pushes.where(branch.present? ? ['branch IN (?)', normalize_to_array(branch)] : [])
     end
 
-    def by_event_type(event_type)
-      event_type == 'pull_request' ?  pull_requests : pushes
+    def by_event_type(event_types)
+      event_types = Array(event_types).flatten
+      event_types << 'push' if event_types.empty?
+      where(event_type: event_types)
     end
 
     def pushes
-      where(:event_type => 'push')
+      where(event_type: 'push')
     end
 
     def pull_requests
       where(event_type: 'pull_request')
+    end
+
+    def api_and_pushes
+      by_event_type(['api', 'push'])
     end
 
     def previous(build)
@@ -119,13 +130,9 @@ class Build < Travis::Model
     end
 
     def older_than(build = nil)
-      scope = descending.paged({}) # TODO in which case we'd call older_than without an argument?
+      scope = order('number::integer DESC').paged({}) # TODO in which case we'd call older_than without an argument?
       scope = scope.where('number::integer < ?', (build.is_a?(Build) ? build.number : build).to_i) if build
       scope
-    end
-
-    def next_number
-      maximum('number::int4').to_i + 1
     end
 
     protected
@@ -139,19 +146,20 @@ class Build < Travis::Model
       end
   end
 
-  after_initialize do
-    self.config = {} if config.nil?
-  end
-
-  # set the build number and expand the matrix
+  # set the build number and expand the matrix; downcase language
   before_create do
-    self.number = repository.builds.next_number
+    next_build_number = Travis::Services::NextBuildNumber.new(repository_id: repository.id).run
+    self.number = next_build_number
     self.previous_state = last_finished_state_on_branch
     self.event_type = request.event_type
     self.pull_request_title = request.pull_request_title
     self.pull_request_number = request.pull_request_number
     self.branch = commit.branch
     expand_matrix
+  end
+
+  after_create do
+    UpdateBranch.new(self).update_last_build unless pull_request?
   end
 
   after_save do
@@ -178,64 +186,16 @@ class Build < Travis::Model
   end
   alias addons_enabled? secure_env_enabled?
 
-  # sometimes the config is not deserialized and is returned
-  # as a string, this is a work around for now :(
-  def config
-    deserialized = self['config']
-    if deserialized.is_a?(String)
-      logger.warn "Attribute config isn't YAML. Current serialized attributes: #{Build.serialized_attributes}"
-      deserialized = YAML.load(deserialized)
-    end
-    deserialized
-  rescue Psych::SyntaxError => e
-    logger.warn "[build id:#{id}] Config could not be deserialized due to #{e.message}"
-    {}
+  def config=(config)
+    super((config || {}).deep_symbolize_keys)
   end
 
-  def config=(config)
-    super(config ? normalize_config(config) : {})
+  def config
+    @config ||= Config.new(super, multi_os: repository.multi_os_enabled?).normalize
   end
 
   def obfuscated_config
-    config.dup.tap do |config|
-      config.delete(:source_key)
-      next unless config[:env]
-      config[:env] = [config[:env]] unless config[:env].is_a?(Array)
-      if config[:env]
-        config[:env] = config[:env].map do |env|
-          env = normalize_env_hashes(env)
-          obfuscate_env(env).join(' ')
-        end
-      end
-    end
-  end
-
-  def normalize_env_hashes(lines)
-    process_line = ->(line) do
-      if line.is_a?(Hash)
-        env_hash_to_string(line)
-      elsif line.is_a?(Array)
-        line.map do |line|
-          env_hash_to_string(line)
-        end
-      else
-        line
-      end
-    end
-
-
-    if lines.is_a?(Array)
-      lines.map { |env| process_line.(env) }
-    else
-      process_line.(lines)
-    end
-  end
-
-  def env_hash_to_string(hash)
-    return hash unless hash.is_a?(Hash)
-    return hash if hash.has_key?(:secure)
-
-    hash.map { |k,v| "#{k}=#{v}" }.join(' ')
+    Config.new(config, key_fetcher: lambda { self.repository.key }).obfuscate
   end
 
   def cancelable?
@@ -251,45 +211,11 @@ class Build < Travis::Model
     state.try(:to_sym) == :passed ? 0 : 1
   end
 
+  def on_default_branch?
+    branch == repository.default_branch
+  end
+
   private
-
-    def normalize_env_values(values)
-      env = values
-      global = nil
-
-      if env.is_a?(Hash) && (env[:global] || env[:matrix])
-        global = env[:global]
-        env    = env[:matrix]
-      end
-
-      if env
-        env = [env] unless env.is_a?(Array)
-        env = normalize_env_hashes(env)
-      end
-
-      if global
-        global = [global] unless global.is_a?(Array)
-        global = normalize_env_hashes(global)
-      end
-
-      { env: env, global: global }
-    end
-
-
-    def normalize_config(config)
-      config = config.deep_symbolize_keys
-      if config[:env]
-        result = normalize_env_values(config[:env])
-        if result[:env]
-          config[:env] = result[:env]
-        else
-          config.delete(:env)
-        end
-
-        config[:global_env] = result[:global] if result[:global]
-      end
-      config
-    end
 
     def last_finished_state_on_branch
       repository.builds.finished.last_state_on(branch: commit.branch)
@@ -297,8 +223,6 @@ class Build < Travis::Model
 
     def to_postgres_array(ids)
       ids = ids.compact.uniq
-      unless ids.empty?
-        "{#{ids.map { |id| id.to_i.to_s }.join(',')}}"
-      end
+      "{#{ids.map { |id| id.to_i.to_s }.join(',')}}" unless ids.empty?
     end
 end

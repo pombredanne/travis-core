@@ -1,8 +1,9 @@
-require 'travis/support'
-require 'travis_core/version'
-require 'gh'
 require 'pusher'
+require 'travis/support'
+require 'travis/support/database'
+require 'travis_core/version'
 require 'travis/redis_pool'
+require 'travis/errors'
 
 # travis-core holds the central parts of the model layer used in both travis-ci
 # (i.e. the web application) as well as travis-hub (a non-rails ui-less JRuby
@@ -36,58 +37,56 @@ module Travis
     end
   end
 
+  require 'travis/model'
   require 'travis/task'
   require 'travis/event'
   require 'travis/addons'
   require 'travis/api'
-  require 'travis/config'
+  require 'travis/config/defaults'
   require 'travis/commit_command'
-  require 'travis/features'
-  require 'travis/services'
   require 'travis/enqueue'
-  require 'travis/requests'
+  require 'travis/features'
   require 'travis/github'
+  require 'travis/logs'
   require 'travis/mailer'
   require 'travis/notification'
+  require 'travis/requests'
+  require 'travis/services'
 
   class UnknownRepository < StandardError; end
   class GithubApiError    < StandardError; end
   class AdminMissing      < StandardError; end
   class RepositoryMissing < StandardError; end
+  class LogAlreadyRemoved < StandardError; end
+  class AuthorizationDenied < StandardError; end
+  class JobUnfinished     < StandardError; end
 
   class << self
-    def setup
+    def setup(options = {})
+      @config = Config.load(*options[:configs])
+      @redis = Travis::RedisPool.new(config.redis.to_h)
+
       Travis.logger.info('Setting up Travis::Core')
 
-      GH.set(
-        client_id:      Travis.config.oauth2.try(:client_id),
-        client_secret:  Travis.config.oauth2.try(:client_secret),
-        user_agent:     "Travis-CI/#{TravisCore::VERSION} GH/#{GH::VERSION}",
-        origin:         Travis.config.host
-      )
-
+      Github.setup
       Addons.register
       Services.register
       Enqueue::Services.register
       Github::Services.register
+      Logs::Services.register
       Requests::Services.register
     end
 
-    attr_accessor :redis
-
-    def start
-      @redis = Travis::RedisPool.new(config.redis)
-    end
-
-    def config
-      @config ||= Config.new
-    end
+    attr_accessor :redis, :config
 
     def pusher
       @pusher ||= ::Pusher.tap do |pusher|
         pusher.app_id = config.pusher.app_id
         pusher.key    = config.pusher.key
         pusher.secret = config.pusher.secret
+        pusher.scheme = config.pusher.scheme if config.pusher.scheme
+        pusher.host   = config.pusher.host   if config.pusher.host
+        pusher.port   = config.pusher.port   if config.pusher.port
       end
     end
 
@@ -97,5 +96,4 @@ module Travis
   end
 
   setup
-  start
 end

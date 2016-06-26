@@ -21,6 +21,7 @@ describe Travis::Api::V0::Event::Build do
       'job_ids' => [1, 2],
       'number' => 2,
       'pull_request' => false,
+      'pull_request_number' => nil,
       'config' => { 'rvm' => ['1.8.7', '1.9.2'], 'gemfile' => ['test/Gemfile.rails-2.3.x', 'test/Gemfile.rails-3.0.x'] },
       'state' => 'passed',
       'previous_state' => 'passed',
@@ -45,8 +46,7 @@ describe Travis::Api::V0::Event::Build do
       'committer_email' => 'svenfuchs@artweb-design.de',
       'committer_name' => 'Sven Fuchs',
       'author_name' => 'Sven Fuchs',
-      'author_email' => 'svenfuchs@artweb-design.de',
-      'compare_url' => 'https://github.com/svenfuchs/minimal/compare/master...develop',
+      'author_email' => 'svenfuchs@artweb-design.de'
     }
   end
 

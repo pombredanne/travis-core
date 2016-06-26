@@ -17,12 +17,16 @@ Gem::Specification.new do |s|
   s.rubyforge_project = '[none]'
 
   s.add_dependency 'rake'
-  s.add_dependency 'thor',              '~> 0.14.6'
-  s.add_dependency 'activerecord',      '~> 3.2.12'
-  s.add_dependency 'actionmailer',      '~> 3.2.12'
-  s.add_dependency 'railties',          '~> 3.2.12'
+  s.add_dependency 'thor'
+  s.add_dependency 'activerecord',      '~> 3.2.19'
+  s.add_dependency 'actionmailer',      '~> 3.2.19'
+  s.add_dependency 'railties',          '~> 3.2.19'
   s.add_dependency 'rollout',           '~> 1.1.0'
   s.add_dependency 'coder',             '~> 0.4.0'
+  s.add_dependency 'virtus',            '~> 1.0.0'
+
+  # travis
+  s.add_dependency 'travis-config',     '~> 0.1.0'
 
   # db
   s.add_dependency 'data_migrations',   '~> 0.0.1'
@@ -30,15 +34,16 @@ Gem::Specification.new do |s|
 
 
   # structures
-  s.add_dependency 'hashr',             '~> 0.0.19'
+  s.add_dependency 'hashr'
   s.add_dependency 'metriks',           '~> 0.9.7'
 
   # app
   s.add_dependency 'simple_states',     '~> 1.0.0'
 
   # apis
-  s.add_dependency 'pusher',            '~> 0.11.0'
+  s.add_dependency 'pusher',            '~> 0.14.0'
   s.add_dependency 's3',                '~> 0.3'
   s.add_dependency 'gh'
   s.add_dependency 'multi_json'
+  s.add_dependency 'google-api-client', '~> 0.9.4'
 end

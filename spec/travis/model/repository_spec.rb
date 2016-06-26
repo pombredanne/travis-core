@@ -4,7 +4,7 @@ describe Repository do
   include Support::ActiveRecord
 
   describe '#last_completed_build' do
-    let(:repo) {  Factory(:repository, name: 'foobarbaz', builds: [build1, build2]) }
+    let(:repo)   {  Factory(:repository, name: 'foobarbaz', builds: [build1, build2]) }
     let(:build1) { Factory(:build, finished_at: 1.hour.ago, state: :passed) }
     let(:build2) { Factory(:build, finished_at: Time.now, state: :failed) }
 
@@ -71,16 +71,26 @@ describe Repository do
     end
 
     describe 'timeline' do
-      it 'sorts the most repository with the most recent build to the top' do
-        one   = Factory(:repository, name: 'one',   last_build_started_at: '2011-11-11')
-        two   = Factory(:repository, name: 'two',   last_build_started_at: '2011-11-12')
+      before do
+        Factory(:repository, name: 'unbuilt 1',   active: true, last_build_started_at: nil, last_build_finished_at: nil)
+        Factory(:repository, name: 'unbuilt 2',   active: true, last_build_started_at: nil, last_build_finished_at: nil)
+        Factory(:repository, name: 'finished 1',  active: true, last_build_started_at: '2011-11-12 12:00:00', last_build_finished_at: '2011-11-12 12:00:05')
+        Factory(:repository, name: 'finished 2',  active: true, last_build_started_at: '2011-11-12 12:00:01', last_build_finished_at: '2011-11-11 12:00:06')
+        Factory(:repository, name: 'started 1',   active: true, last_build_started_at: '2011-11-11 12:00:00', last_build_finished_at: nil)
+        Factory(:repository, name: 'started 2',   active: true, last_build_started_at: '2011-11-11 12:00:01', last_build_finished_at: nil)
+        Factory(:repository, name: 'invalidated', active: true, last_build_started_at: '2011-11-11 12:00:01', last_build_finished_at: nil, invalidated_at: '2012-11-11 12:00:06')
+      end
 
-        repositories = Repository.timeline.all
-        repositories.first.id.should == two.id
-        repositories.last.id.should  == one.id
+      it 'sorts repositories with running builds to the top, most recent builds next, un-built repos last' do
+        repositories = Repository.timeline
+        repositories.map(&:name).should == ['started 2', 'started 1', 'finished 2', 'finished 1', 'unbuilt 2', 'unbuilt 1']
+      end
+
+      it 'does not include invalidated repos' do
+        repositories = Repository.timeline
+        repositories.map(&:name).should_not include('invalidated')
       end
     end
-
 
     describe 'with_builds' do
       it 'gets only projects with existing builds' do
@@ -94,8 +104,9 @@ describe Repository do
     end
 
     describe 'active' do
-      let(:active)   { Factory(:repository, active: true) }
-      let(:inactive) { Factory(:repository, active: false) }
+      let(:active)      { Factory(:repository, active: true) }
+      let(:inactive)    { Factory(:repository, active: false) }
+      let(:invalidated) { Factory(:repository, invalidated_at: Time.now) }
 
       it 'contains active repositories' do
         Repository.active.should include(active)
@@ -104,12 +115,17 @@ describe Repository do
       it 'does not include inactive repositories' do
         Repository.active.should_not include(inactive)
       end
+
+      it 'does not include invalidated repositories' do
+        Repository.active.should_not include(invalidated)
+      end
     end
 
     describe 'search' do
       before(:each) do
         Factory(:repository, name: 'repo 1', last_build_started_at: '2011-11-11')
         Factory(:repository, name: 'repo 2', last_build_started_at: '2011-11-12')
+        Factory(:repository, name: 'invalidated', invalidated_at: Time.now)
       end
 
       it 'performs searches case-insensitive' do
@@ -123,21 +139,30 @@ describe Repository do
       it 'performs searches with \ entered' do
         Repository.search('fuchs\\').to_a.count.should == 2
       end
+
+      it 'does not find invalidated repos' do
+        Repository.search('fuchs').map(&:name).should_not include('invalidated')
+      end
     end
 
     describe 'by_member' do
-      let(:user) { Factory(:user) }
-      let(:org)  { Factory(:org) }
-      let(:user_repo) { Factory(:repository, owner: user)}
-      let(:org_repo)  { Factory(:repository, owner: org, name: 'globalize')}
-
+      let(:user)        { Factory(:user) }
+      let(:org)         { Factory(:org) }
+      let(:user_repo)   { Factory(:repository, owner: user)}
+      let(:org_repo)    { Factory(:repository, owner: org, name: 'globalize')}
+      let(:invalidated) { Factory(:repository, owner: org, name: 'invalidated', invalidated_at: Time.now)}
       before do
         Permission.create!(user: user, repository: user_repo, pull: true, push: true)
         Permission.create!(user: user, repository: org_repo, pull: true)
+        Permission.create!(user: user, repository: invalidated, pull: true)
       end
 
       it 'returns all repositories a user has rights to' do
         Repository.by_member('svenfuchs').should have(2).items
+      end
+
+      it 'does not find invalidated repos' do
+        Repository.by_member('svenfuchs').map(&:name).should_not include('invalidated')
       end
     end
 
@@ -145,6 +170,7 @@ describe Repository do
       let!(:repositories) do
         Factory(:repository, owner_name: 'svenfuchs', name: 'minimal')
         Factory(:repository, owner_name: 'travis-ci', name: 'travis-ci')
+        Factory(:repository, owner_name: 'travis-ci', name: 'invalidated', invalidated_at: Time.now)
       end
 
       it 'returns repository counts per owner_name for the given owner_names' do
@@ -167,27 +193,112 @@ describe Repository do
   end
 
   describe 'source_url' do
-    let(:repo) { Repository.new(owner_name: 'travis-ci', name: 'travis-ci') }
+    describe 'default source endpoint' do
+      let(:repo) { Repository.new(owner_name: 'travis-ci', name: 'travis-ci') }
 
-    it 'returns the public git source url for a public repository' do
-      repo.private = false
-      repo.source_url.should == 'git://github.com/travis-ci/travis-ci.git'
+      before :each do
+        Travis.config.github.source_host = nil
+      end
+
+      it 'returns the public git source url for a public repository' do
+        repo.private = false
+        repo.source_url.should == 'git://github.com/travis-ci/travis-ci.git'
+      end
+
+      it 'returns the private git source url for a private repository' do
+        repo.private = true
+        repo.source_url.should == 'git@github.com:travis-ci/travis-ci.git'
+      end
     end
 
-    it 'returns the private git source url for a private repository' do
-      repo.private = true
-      repo.source_url.should == 'git@github.com:travis-ci/travis-ci.git'
+    describe 'custom source endpoint' do
+      let(:repo) { Repository.new(owner_name: 'travis-ci', name: 'travis-ci') }
+
+      before :each do
+        Travis.config.github.source_host = 'localhost'
+      end
+
+      it 'returns the private git source url for a public repository' do
+        repo.private = false
+        repo.source_url.should == 'git@localhost:travis-ci/travis-ci.git'
+      end
+
+      it 'returns the private git source url for a private repository' do
+        repo.private = true
+        repo.source_url.should == 'git@localhost:travis-ci/travis-ci.git'
+      end
     end
   end
 
-  it "last_build returns the most recent build" do
-    repo = Factory(:repository)
-    attributes = { repository: repo, state: 'finished' }
-    Factory(:build, attributes)
-    Factory(:build, attributes)
-    build = Factory(:build, attributes)
+  describe 'source_host' do
+    before :each do
+      Travis.config.github.stubs(:source_host).returns('localhost')
+    end
 
-    repo.last_build.id.should == build.id
+    it 'returns the source_host name from Travis.config' do
+      Repository.new.source_host.should == 'localhost'
+    end
+  end
+
+  describe "#last_build" do
+    let(:repo) { Factory(:repository) }
+    let(:attributes) { { repository: repo, state: 'finished' } }
+    let(:api_req)    { Factory(:request, {event_type: 'api'}) }
+
+    before :each do
+      Factory(:build, attributes)
+      Factory(:build, attributes)
+    end
+
+    context 'when last build is a push build' do
+      before :each do
+        @build = Factory(:build, attributes)
+      end
+
+      it 'returns the most recent build' do
+        repo.last_build('master').id.should == @build.id
+      end
+    end
+
+    context 'when last build is an API build' do
+      before :each do
+        @build = Factory(:build, attributes.merge({request: api_req}))
+      end
+
+      it 'returns the most recent build' do
+        repo.last_build('master').id.should == @build.id
+      end
+    end
+  end
+
+  describe '#last_build_on' do
+    let(:repo)       { Factory(:repository) }
+    let(:attributes) { { repository: repo, state: 'finished' } }
+    let(:api_req)    { Factory(:request, {event_type: 'api'}) }
+
+    before :each do
+      Factory(:build, attributes)
+    end
+
+    context 'when last build is a push build' do
+      before :each do
+        @build = Factory(:build, attributes)
+      end
+
+      it 'returns the most recent build' do
+        repo.last_build_on('master').id.should == @build.id
+      end
+    end
+
+    context 'when last build is an API build' do
+      before :each do
+        @build = Factory(:build, attributes.merge({request: api_req}))
+      end
+
+      it 'returns the most recent build' do
+        repo.last_build_on('master').id.should == @build.id
+      end
+    end
   end
 
   describe "keys" do
@@ -218,20 +329,107 @@ describe Repository do
     end
   end
 
+  describe 'settings' do
+    let(:repo) { Factory.build(:repository) }
+
+    it 'adds repository_id to collection records' do
+      repo.save
+
+      env_var = repo.settings.env_vars.create(name: 'FOO')
+      env_var.repository_id.should == repo.id
+
+      repo.settings.save
+
+      repo.reload
+
+      repo.settings.env_vars.first.repository_id.should == repo.id
+    end
+
+    it "is reset on reload" do
+      repo.save
+
+      repo.settings = {}
+      repo.update_column(:settings, { 'build_pushes' => false }.to_json)
+      repo.reload
+      repo.settings.build_pushes?.should be_false
+      repo.update_column(:settings, { 'build_pushes' => true }.to_json)
+      repo.reload
+      repo.settings.build_pushes?.should be_true
+    end
+
+    it "allows to set nil for settings" do
+      repo.settings = nil
+      repo.settings.to_hash.should == Repository::Settings.new.to_hash
+    end
+
+    it "allows to set settings as JSON string" do
+      repo.settings = '{"maximum_number_of_builds": 44}'
+      repo.settings.to_hash.should == Repository::Settings.new(maximum_number_of_builds: 44).to_hash
+    end
+
+    it "allows to set settings as a Hash" do
+      repo.settings = { maximum_number_of_builds: 44}
+      repo.settings.to_hash.should == Repository::Settings.new(maximum_number_of_builds: 44).to_hash
+    end
+
+    it 'updates settings in the DB' do
+      repo.settings = {'build_pushes' => false}
+      repo.save
+
+      repo.reload.settings.build_pushes?.should == false
+
+      repo.settings.merge('build_pushes' => true)
+      repo.settings.save
+
+      repo.reload.settings.build_pushes?.should == true
+    end
+  end
+
   describe 'last_finished_builds_by_branches' do
     let(:repo) { Factory(:repository) }
+
+    it 'properly orders branches by last build' do
+      Build.delete_all
+      one = Factory(:build, repository: repo, finished_at: 2.hours.ago, state: 'finished', commit: Factory(:commit, branch: '1one'))
+      two = Factory(:build, repository: repo, finished_at: 1.hours.ago, state: 'finished', commit: Factory(:commit, branch: '2two'))
+
+      builds = repo.last_finished_builds_by_branches(1)
+      builds.should == [two]
+    end
 
     it 'retrieves last builds on all branches' do
       Build.delete_all
       old = Factory(:build, repository: repo, finished_at: 1.hour.ago,      state: 'finished', commit: Factory(:commit, branch: 'one'))
       one = Factory(:build, repository: repo, finished_at: 1.hour.from_now, state: 'finished', commit: Factory(:commit, branch: 'one'))
       two = Factory(:build, repository: repo, finished_at: 1.hour.from_now, state: 'finished', commit: Factory(:commit, branch: 'two'))
+      three = Factory(:build, repository: repo, finished_at: 1.hour.from_now, state: 'finished', commit: Factory(:commit, branch: 'three'))
+      three.update_attribute(:event_type, 'pull_request')
 
       builds = repo.last_finished_builds_by_branches
       builds.size.should == 2
       builds.should include(one)
       builds.should include(two)
       builds.should_not include(old)
+    end
+  end
+
+  describe '#users_with_permission' do
+    it 'returns users with the given permission linked to that repository' do
+      repo = Factory(:repository)
+      other_repo = Factory(:repository)
+
+      user_with_permission = Factory(:user)
+      user_with_permission.permissions.create!(repository: repo, admin: true)
+
+      user_wrong_repo = Factory(:user)
+      user_wrong_repo.permissions.create!(repository: other_repo, admin: true)
+
+      user_wrong_permission = Factory(:user)
+      user_wrong_permission.permissions.create!(repository: repo, push: true)
+
+      repo.users_with_permission(:admin).should include(user_with_permission)
+      repo.users_with_permission(:admin).should_not include(user_wrong_repo)
+      repo.users_with_permission(:admin).should_not include(user_wrong_permission)
     end
   end
 end

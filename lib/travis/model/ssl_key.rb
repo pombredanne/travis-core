@@ -1,5 +1,6 @@
 require 'openssl'
 require 'base64'
+require 'travis/model'
 
 # A Repository has an SSL key pair that is used to encrypt/decrypt sensitive
 # data so it can be added to a public `.travis.yml` file (e.g. Campfire
@@ -34,7 +35,7 @@ class SslKey < Travis::Model
 
   def generate_keys
     unless public_key && private_key
-      keys = OpenSSL::PKey::RSA.generate(1024)
+      keys = OpenSSL::PKey::RSA.generate(Travis.config.repository.ssl_key.size)
       self.public_key = keys.public_key.to_s
       self.private_key = keys.to_pem
     end
@@ -50,7 +51,7 @@ class SslKey < Travis::Model
   end
 
   def secure
-    Travis::Event::SecureConfig.new(self)
+    Travis::SecureConfig.new(self)
   end
 
   private

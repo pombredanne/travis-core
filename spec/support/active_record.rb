@@ -7,7 +7,7 @@ require 'travis/testing/factories'
 FileUtils.mkdir_p('log')
 
 # TODO why not make this use Travis::Database.connect ?
-config = Travis.config.database.dup
+config = Travis.config.database.to_h
 config.merge!('adapter' => 'jdbcpostgresql', 'username' => ENV['USER']) if RUBY_PLATFORM == 'java'
 
 ActiveRecord::Base.default_timezone = :utc
@@ -23,6 +23,18 @@ module Support
     extend ActiveSupport::Concern
 
     included do
+      before :suite do
+        DatabaseCleaner.clean_with(:truncation)
+      end
+
+      before :each do
+        DatabaseCleaner.strategy = :transaction
+      end
+
+      before(:each, :truncation => true) do
+        DatabaseCleaner.strategy = :truncation
+      end
+
       before :each do
         DatabaseCleaner.start
       end

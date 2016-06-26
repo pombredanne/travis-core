@@ -1,3 +1,21 @@
+API_PAYLOADS = {
+  'custom' => {
+    'repository' => {
+      'owner_id' => 2208,
+      'owner_type' => 'User',
+      'owner_name' => 'svenfuchs',
+      'name' => 'gem-release'
+    },
+    'branch' => 'master',
+    'config' => {
+      'env' => ['FOO=foo', 'BAR=bar']
+    },
+    'user' => {
+      'id' => 1
+    }
+  }
+}
+
 GITHUB_PAYLOADS = {
   "private-repo" => %({
     "repository": {
@@ -32,6 +50,7 @@ GITHUB_PAYLOADS = {
       "name": "gem-release",
       "description": "Release your gems with ease",
       "owner": {
+        "id": "2208",
         "email": "svenfuchs@artweb-design.de",
         "name": "svenfuchs"
       }
@@ -170,8 +189,9 @@ GITHUB_PAYLOADS = {
 
   "travis-core" => %({
     "repository": {
+      "id": 111,
       "url": "http://github.com/travis-ci/travis-core",
-      "name": "gem-release",
+      "name": "travis-core",
       "description": "description for travis-core",
       "organization": "travis-ci",
       "owner": {
@@ -199,7 +219,7 @@ GITHUB_PAYLOADS = {
   "travis-core-no-commit" => %({
     "repository": {
       "url": "http://github.com/travis-ci/travis-core",
-      "name": "gem-release",
+      "name": "travis-core",
       "description": "description for travis-core",
       "organization": "travis-ci",
       "owner": {
@@ -366,6 +386,7 @@ GITHUB_PAYLOADS = {
             "login": "travis-repos"
           },
           "name": "test-project-1",
+          "full_name": "travis-repos/test-project-1",
           "watchers": 8,
           "html_url": "https://github.com/travis-repos/test-project-1",
           "id": 1615549,
@@ -413,6 +434,7 @@ GITHUB_PAYLOADS = {
             "login": "rkh"
           },
           "name": "test-project-1",
+          "full_name": "rkh/test-project-1",
           "watchers": 1,
           "html_url": "https://github.com/rkh/test-project-1",
           "id": 3431064,
@@ -569,13 +591,14 @@ GITHUB_OAUTH_DATA = {
 }
 
 WORKER_PAYLOADS = {
-  'job:test:start'  => { 'id' => 1, 'state' => 'started',  'started_at'  => '2011-01-01 00:02:00 +0200', 'worker' => 'ruby3.worker.travis-ci.org:travis-ruby-4' },
-  'job:test:log'    => { 'id' => 1, 'log' => '... appended' },
-  'job:test:log:1'  => { 'id' => 1, 'log' => 'the '  },
-  'job:test:log:2'  => { 'id' => 1, 'log' => 'full ' },
-  'job:test:log:3'  => { 'id' => 1, 'log' => 'log'   },
-  'job:test:finish' => { 'id' => 1, 'state' => 'passed', 'finished_at' => '2011-01-01 00:03:00 +0200', 'log' => 'the full log' },
-  'job:test:reset'  => { 'id' => 1 }
+  'job:test:receive' => { 'id' => 1, 'state' => 'received',  'received_at'  => '2011-01-01 00:02:00 +0200', 'worker' => 'ruby3.worker.travis-ci.org:travis-ruby-4' },
+  'job:test:start'   => { 'id' => 1, 'state' => 'started',  'started_at'  => '2011-01-01 00:02:00 +0200', 'worker' => 'ruby3.worker.travis-ci.org:travis-ruby-4' },
+  'job:test:log'     => { 'id' => 1, 'log' => '... appended' },
+  'job:test:log:1'   => { 'id' => 1, 'log' => 'the '  },
+  'job:test:log:2'   => { 'id' => 1, 'log' => 'full ' },
+  'job:test:log:3'   => { 'id' => 1, 'log' => 'log'   },
+  'job:test:finish'  => { 'id' => 1, 'state' => 'passed', 'finished_at' => '2011-01-01 00:03:00 +0200', 'log' => 'the full log' },
+  'job:test:reset'   => { 'id' => 1 }
 }
 
 WORKER_LEGACY_PAYLOADS = {

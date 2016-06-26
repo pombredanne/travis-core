@@ -10,11 +10,13 @@ class Job
   # created with the Build.
   class Test < Job
     FINISHED_STATES = [:passed, :failed, :errored, :canceled]
+    FAILED_STATES = [:failed, :errored, :canceled]
 
     include SimpleStates, Travis::Event
 
-    states :created, :queued, :started, :passed, :failed, :errored, :canceled
+    states :created, :queued, :received, :started, :passed, :failed, :errored, :canceled
 
+    event :receive, to: :received
     event :start,   to: :started
     event :finish,  to: :finished
     event :reset,   to: :created, unless: :created?
@@ -26,9 +28,14 @@ class Job
       notify(:queue)
     end
 
+    def receive(data = {})
+      log.update_attributes!(content: '', removed_at: nil, removed_by: nil) # TODO this should be in a restart method, right?
+      data = data.symbolize_keys.slice(:received_at, :worker)
+      data.each { |key, value| send(:"#{key}=", value) }
+    end
+
     def start(data = {})
-      log.update_attributes!(content: '') # TODO this should be in a restart method, right?
-      data = data.symbolize_keys.slice(:started_at, :worker)
+      data = data.symbolize_keys.slice(:started_at)
       data.each { |key, value| send(:"#{key}=", value) }
     end
 
@@ -46,6 +53,7 @@ class Job
       else
         build_log
       end
+      annotations.destroy_all
     end
 
     def cancel
@@ -71,6 +79,10 @@ class Job
       FINISHED_STATES.include?(state.to_sym)
     end
 
+    def finished_unsuccessfully?
+      FAILED_STATES.include?(state.to_sym)
+    end
+
     def passed?
       state.to_s == "passed"
     end
@@ -84,8 +96,10 @@ class Job
     end
 
     def notify(event, *args)
-      event = :create if event == :reset
-      super
+      Metriks.timer("job.notify.#{event}").time do
+        event = :create if event == :reset
+        super
+      end
     end
 
     delegate :id, :content, :to => :log, :prefix => true, :allow_nil => true

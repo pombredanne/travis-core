@@ -18,30 +18,14 @@ class Build
   #  * an arbitrary env key that can be used from within the test suite in
   #    order to branch out specific variations of the test run
   module Matrix
-    require 'travis/model/build/matrix/config'
     extend ActiveSupport::Concern
-    ENV_KEYS = [:rvm, :gemfile, :env, :otp_release, :php, :node_js, :scala, :jdk, :python, :perl, :compiler, :go, :xcode_sdk, :xcode_scheme]
 
-
-    module ClassMethods
-      def matrix?(config)
-        config.values_at(*ENV_KEYS).compact.any? { |value| value.is_a?(Array) && value.size > 1 }
+    def matrix_finished?
+      if matrix_config.fast_finish?
+        required_jobs.all?(&:finished?) || required_jobs.any?(&:finished_unsuccessfully?)
+      else
+        matrix.all?(&:finished?)
       end
-
-      def matrix_keys_for(config)
-        keys = ENV_KEYS + [:branch]
-        keys & config.keys.map(&:to_sym)
-      end
-    end
-
-    # Return only the child builds whose config matches against as passed hash
-    # e.g. build.matrix_for(rvm: '1.8.7', env: 'DB=postgresql')
-    def matrix_for(config)
-      config.blank? ? matrix : matrix.select { |job| job.matrix_config?(config) }
-    end
-
-    def matrix_finished?(*)
-      matrix.all?(&:finished?)
     end
 
     def matrix_duration
@@ -49,19 +33,18 @@ class Build
     end
 
     def matrix_state
-      tests = matrix.reject { |test| test.allow_failure? }
-      if tests.blank?
+      if required_jobs.blank?
         :passed
-      elsif tests.any?(&:canceled?)
+      elsif required_jobs.any?(&:canceled?)
         :canceled
-      elsif tests.any?(&:errored?)
+      elsif required_jobs.any?(&:errored?)
         :errored
-      elsif tests.any?(&:failed?)
+      elsif required_jobs.any?(&:failed?)
         :failed
-      elsif tests.all?(&:passed?)
+      elsif required_jobs.all?(&:passed?)
         :passed
       else
-        raise StandardError, "Invalid job state (#{tests.map(&:state)})"
+        raise InvalidMatrixStateException.new(matrix)
       end
     end
 
@@ -70,10 +53,10 @@ class Build
       matrix_config.expand.each_with_index do |row, ix|
         attributes = self.attributes.slice(*Job.column_names - ['status', 'result']).symbolize_keys
         attributes.merge!(
-          :owner => owner,
-          :number => "#{number}.#{ix + 1}",
-          :config => expand_config(row),
-          :log => Log.new
+          owner: owner,
+          number: "#{number}.#{ix + 1}",
+          config: row,
+          log: Log.new
         )
         matrix.build(attributes)
       end
@@ -86,32 +69,46 @@ class Build
       save!
     end
 
-    protected
+    # Return only the child builds whose config matches against as passed hash
+    # e.g. build.filter_matrix(rvm: '1.8.7', env: 'DB=postgresql')
+    def filter_matrix(config)
+      config.blank? ? matrix : matrix.select { |job| job.matches_config?(config) }
+    end
 
-      def expand_config(row)
-        hash = {}
-        row.each do |key, values|
-          hash[key] = values
-        end
-
-        config.merge(hash)
-      end
+    private
 
       def matrix_config
-        @matrix_config ||= Config.new(self)
-      end
-
-      # TODO: this is used in tests, fix this, it's not needed anymore, there is
-      #       you can use matrix_config.expand method
-      def expand_matrix_config(config)
-        config.expand
+        @matrix_config ||= Config::Matrix.new(config, multi_os: repository.multi_os_enabled?, dist_group_expansion: repository.dist_group_expansion_enabled?)
       end
 
       def matrix_allow_failures
-        allow_configs = matrix_config.matrix_settings[:allow_failures] || []
-        allow_configs.each do |config|
-          matrix_for(config).each { |m| m.allow_failure = true }
-        end
+        configs = matrix_config.allow_failure_configs
+        jobs = configs.map { |config| filter_matrix(config) }.flatten
+        jobs.each { |job| job.allow_failure = true }
       end
+
+      def required_jobs
+        @required_jobs ||= matrix.reject { |test| test.allow_failure? }
+      end
+  end
+
+  class InvalidMatrixStateException < StandardError
+    attr_reader :matrix
+
+    def initialize(matrix)
+      @matrix = matrix
+    end
+
+    def to_s
+      sanitized = matrix.map do |job|
+        "\n\tid: #{job.id}, repository: #{job.repository.slug}, state: #{job.state}, " +
+        "allow_failure: #{job.allow_failure}, " +
+        "created_at: #{job.created_at.inspect}, queued_at: #{job.queued_at.inspect}, " +
+        "started_at: #{job.started_at.inspect}, finished_at: #{job.finished_at.inspect}, " +
+        "canceled_at: #{job.canceled_at.inspect}, updated_at: #{job.updated_at.inspect}"
+      end.join
+
+      "Invalid build matrix state detected.\nMatrix: #{sanitized}"
+    end
   end
 end

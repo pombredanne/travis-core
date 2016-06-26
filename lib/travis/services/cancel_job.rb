@@ -1,4 +1,5 @@
 require 'travis/notification'
+require 'travis/services/base'
 
 module Travis
   module Services
@@ -29,6 +30,8 @@ module Travis
       end
 
       def cancel
+        # job may have been retrieved with a :join query, so we need to reset the readonly status
+        job.send(:instance_variable_set, :@readonly, false)
         publish!
         job.cancel!
       end
@@ -38,7 +41,7 @@ module Travis
       end
 
       def authorized?
-        current_user.permission?(:push, :repository_id => job.repository_id)
+        current_user.permission?(:pull, :repository_id => job.repository_id)
       end
 
       def job

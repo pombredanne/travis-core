@@ -1,5 +1,8 @@
-require 'travis/model'
+require 'gh'
+require 'travis/model/repository'
+require 'travis/model/user'
 require 'travis/model/user/renaming'
+require 'travis/services/base'
 
 module Travis
   module Github
@@ -44,6 +47,8 @@ module Travis
             nullify_logins(user.github_id, user.login)
 
             user
+          rescue ActiveRecord::RecordNotUnique
+            find
           end
 
           def data

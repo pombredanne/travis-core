@@ -1,4 +1,9 @@
+require 'gh'
+require 'yaml'
 require 'active_support/core_ext/class/attribute'
+require 'travis/support/logging'
+require 'travis/support/instrumentation'
+require 'travis/services/base'
 
 module Travis
   module Github
@@ -11,7 +16,7 @@ module Travis
         register :github_fetch_config
 
         def run
-          config = retrying(3) { parse(fetch) }
+          config = retrying(3) { filter(parse(fetch)) }
           config || Travis.logger.warn("[request:fetch_config] Empty config for request id=#{request.id} config_url=#{config_url.inspect}")
         rescue GH::Error => e
           if e.info[:response_status] == 404
@@ -46,16 +51,24 @@ module Travis
           def parse(yaml)
             YAML.load(yaml).merge('.result' => 'configured')
           rescue StandardError, Psych::SyntaxError => e
-            log_exception(e)
+            error "[request:fetch_config] Error parsing .travis.yml for #{config_url}: #{e.message}"
             {
               '.result' => 'parse_error',
               '.result_message' => e.is_a?(Psych::SyntaxError) ? e.message.split(": ").last : e.message
             }
           end
 
+          def filter(config)
+            unless Travis::Features.active?(:template_selection, request.repository)
+              config = config.to_h.except('dist').except('group')
+            end
+
+            config
+          end
+
           def retrying(times)
             count, result = 0, nil
-            until result || count > 3
+            until result || count > times
               result = yield
               count += 1
               Travis.logger.warn("[request:fetch_config] Retrying to fetch config for #{config_url}") unless result
@@ -65,8 +78,8 @@ module Travis
 
           class Instrument < Notification::Instrument
             def run_completed
-              # TODO exctract something like Url.strip_token
-              config_url = target.config_url.gsub(/access_token=\w*/, 'access_token=[secure]')
+              # TODO exctract something like Url.strip_secrets
+              config_url = target.config_url.gsub(/(token|secret)=\w*/) { "#{$1}=[secure]" }
               publish(msg: "#{config_url}", url: config_url, result: result)
             end
           end

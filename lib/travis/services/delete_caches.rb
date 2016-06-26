@@ -1,3 +1,5 @@
+require 'travis/services/base'
+
 module Travis
   module Services
     class DeleteCaches < Base
@@ -5,7 +7,7 @@ module Travis
 
       def run
         caches = run_service(:find_caches, params)
-        caches.each { |c| c.s3_object.destroy }
+        caches.each { |c| c.destroy }
         caches
       end
     end

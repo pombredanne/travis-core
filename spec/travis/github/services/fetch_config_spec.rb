@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 describe Travis::Github::Services::FetchConfig do
-  include Travis::Testing::Stubs
+  include Travis::Testing::Stubs, Support::Redis
 
   let(:body)      { { 'content' => ['foo: Foo'].pack('m') } }
   let(:service)   { described_class.new(nil, request: request) }
@@ -51,6 +51,34 @@ describe Travis::Github::Services::FetchConfig do
       GH.stubs(:[]).returns({ "content" => ["foo:\n\xC2\xA0\xC2\xA0bar: Foobar"].pack("m") })
       result["foo"].should eql({ "bar" => "Foobar" })
     end
+
+    context "when the repository has the template_selection feature enabled" do
+      before do
+        Travis::Features.activate_repository(:template_selection, request.repository)
+      end
+
+      it "passes the 'group' config key through" do
+        GH.stubs(:[]).returns({ "content" => ["group: latest"].pack("m") })
+        result["group"].should eql("latest")
+      end
+
+      it "passes the 'dist' config key through" do
+        GH.stubs(:[]).returns({ "content" => ["dist: latest"].pack("m") })
+        result["dist"].should eql("latest")
+      end
+    end
+
+    context "when the repository doesn't have the template_selection feature enabled" do
+      it "doesn't pass the 'group' config key through" do
+        GH.stubs(:[]).returns({ "content" => ["group: latest"].pack("m") })
+        result.has_key?("group").should be false
+      end
+
+      it "doesn't pass the 'dist' config key through" do
+        GH.stubs(:[]).returns({ "content" => ["dist: latest"].pack("m") })
+        result.has_key?("dist").should be false
+      end
+    end
   end
 end
 
@@ -89,5 +117,11 @@ describe Travis::Github::Services::FetchConfig::Instrument do
     service.stubs(:config_url).returns('/foo/bar?ref=abcd&access_token=123456')
     service.run
     event[:data][:url].should == '/foo/bar?ref=abcd&access_token=[secure]'
+  end
+
+  it 'strips a secret if present (2)' do
+    service.stubs(:config_url).returns('/foo/bar?ref=abcd&client_secret=123456')
+    service.run
+    event[:data][:url].should == '/foo/bar?ref=abcd&client_secret=[secure]'
   end
 end

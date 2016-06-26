@@ -1,10 +1,12 @@
+require 'travis/secure_config'
+
 module Travis
   module Event
     class Config
       DEFAULTS = {
-        start:   { email: false,   webhooks: false,   campfire: false,   hipchat: false,   irc: false,   flowdock: false },
-        success: { email: :change, webhooks: :always, campfire: :always, hipchat: :always, irc: :always, flowdock: :always },
-        failure: { email: :always, webhooks: :always, campfire: :always, hipchat: :always, irc: :always, flowdock: :always }
+        start:   { email: false,   webhooks: false,   campfire: false,   hipchat: false,   irc: false,   flowdock: false, sqwiggle: false, slack: false, pushover: false },
+        success: { email: :change, webhooks: :always, campfire: :always, hipchat: :always, irc: :always, flowdock: :always, sqwiggle: :always, slack: :always, pushover: :always, },
+        failure: { email: :always, webhooks: :always, campfire: :always, hipchat: :always, irc: :always, flowdock: :always, sqwiggle: :always, slack: :always, pushover: :always, }
       }
 
       attr_reader :payload, :build, :secure_key, :config
@@ -94,7 +96,7 @@ module Travis
       end
 
       def notifications
-        Travis::Event::SecureConfig.decrypt(config.fetch(:notifications, {}), secure_key)
+        Travis::SecureConfig.decrypt(config.fetch(:notifications, {}), secure_key)
       end
 
       def normalize_array(values)

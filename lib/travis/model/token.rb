@@ -1,4 +1,5 @@
 require 'securerandom'
+require 'travis/model'
 
 # Tokens used for authenticating requests from Github.
 #

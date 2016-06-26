@@ -2,6 +2,7 @@ require 'travis/notification'
 
 module Travis
   module Addons
+    require 'travis/addons/archive'
     require 'travis/addons/campfire'
     require 'travis/addons/email'
     require 'travis/addons/flowdock'
@@ -10,8 +11,10 @@ module Travis
     require 'travis/addons/irc'
     require 'travis/addons/pusher'
     require 'travis/addons/states_cache'
-    require 'travis/addons/util'
+    require 'travis/addons/sqwiggle'
     require 'travis/addons/webhook'
+    require 'travis/addons/slack'
+    require 'travis/addons/pushover'
 
     class << self
       def register

@@ -1,4 +1,5 @@
 require 'core_ext/active_record/none_scope'
+require 'travis/services/base'
 
 module Travis
   module Services
@@ -7,10 +8,6 @@ module Travis
 
       def run
         result
-      end
-
-      def updated_at
-        result.maximum(:updated_at)
       end
 
       private

@@ -19,12 +19,10 @@ class Request
     def configure
       if !accepted?
         Travis.logger.warn("[request:configure] Request not accepted: event_type=#{event_type.inspect} commit=#{commit.try(:commit).inspect} message=#{approval.message.inspect}")
-      elsif config.present?
-        Travis.logger.warn("[request:configure] Request not configured: config not blank, config=#{config.inspect} commit=#{commit.try(:commit).inspect}")
       else
-        self.config = fetch_config
+        self.config = fetch_config.merge(config || {})
 
-        if branch_accepted?
+        if branch_accepted? && config_accepted?
           Travis.logger.info("[request:configure] Request successfully configured commit=#{commit.commit.inspect}")
         else
           self.config = nil
@@ -36,7 +34,7 @@ class Request
 
     def finish
       if config.blank?
-        Travis.logger.warn("[request:finish] Request not creating a build: config is blank, config=#{config.inspect} commit=#{commit.try(:commit).inspect}")
+        Travis.logger.warn("[request:finish] Request not creating a build: config is blank or contains YAML syntax error, config=#{config.inspect} commit=#{commit.try(:commit).inspect}")
       elsif !approved?
         Travis.logger.warn("[request:finish] Request not creating a build: not approved commit=#{commit.try(:commit).inspect} message=#{approval.message.inspect}")
       elsif parse_error?
@@ -46,7 +44,7 @@ class Request
         Travis.logger.info("[request:finish] Request created but Build and Job automatically errored due to a config server error. commit=#{commit.try(:commit).inspect}")
         add_server_error_build
       else
-        add_build
+        add_build_and_notify
         Travis.logger.info("[request:finish] Request created a build. commit=#{commit.try(:commit).inspect}")
       end
       self.result = approval.result
@@ -54,9 +52,19 @@ class Request
       Travis.logger.info("[request:finish] Request finished. result=#{result.inspect} message=#{message.inspect} commit=#{commit.try(:commit).inspect}")
     end
 
+    def add_build
+      builds.create!(:repository => repository, :commit => commit, :config => config, :owner => owner)
+    end
+
+    def add_build_and_notify
+      add_build.tap do |build|
+        build.notify(:created) if Travis.config.notify_on_build_created
+      end
+    end
+
     protected
 
-      delegate :accepted?, :approved?, :branch_accepted?, :to => :approval
+      delegate :accepted?, :approved?, :branch_accepted?, :config_accepted?, :to => :approval
 
       def approval
         @approval ||= Approval.new(self)
@@ -64,10 +72,6 @@ class Request
 
       def fetch_config
         Travis.run_service(:github_fetch_config, request: self) # TODO move to a service, have it pass the config to configure
-      end
-
-      def add_build
-        builds.create!(:repository => repository, :commit => commit, :config => config, :owner => owner)
       end
 
       def add_parse_error_build
@@ -79,6 +83,8 @@ class Request
 \033[31;1mERROR\033[0m: An error occured while trying to parse your .travis.yml file.
 
 Please make sure that the file is valid YAML.
+
+http://lint.travis-ci.org can check your .travis.yml.
 
 The error was "#{config[".result_message"]}".
 ERROR

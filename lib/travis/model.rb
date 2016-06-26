@@ -2,16 +2,20 @@
 #   https://github.com/travis-ci/travis-support/blob/master/lib/core_ext/module/load_constants.rb
 # which is used in
 #   https://github.com/travis-ci/travis-hub/blob/master/lib/travis/hub/cli.rb#L15
+require 'active_record'
 require 'core_ext/active_record/base'
 
 module Travis
   class Model < ActiveRecord::Base
+    require 'travis/model/logs_model'
     require 'travis/model/account'
+    require 'travis/model/annotation'
+    require 'travis/model/annotation_provider'
+    require 'travis/model/branch'
     require 'travis/model/broadcast'
     require 'travis/model/build'
     require 'travis/model/commit'
     require 'travis/model/email'
-    require 'travis/model/encrypted_column'
     require 'travis/model/env_helpers'
     require 'travis/model/job'
     require 'travis/model/log'
@@ -23,9 +27,7 @@ module Travis
     require 'travis/model/ssl_key'
     require 'travis/model/token'
     require 'travis/model/user'
-    require 'travis/model/worker'
     require 'travis/model/url'
-    require 'travis/model/event'
 
     self.abstract_class = true
 

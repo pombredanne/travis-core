@@ -2,12 +2,13 @@ require 'securerandom'
 require 'base64'
 
 class Travis::Model::EncryptedColumn
-  attr_reader :disable
+  attr_reader :disable, :options
   alias disabled? disable
 
   def initialize(options = {})
-    options = options || {}
-    @disable = options[:disable]
+    @options = options || {}
+    @disable = self.options[:disable]
+    @key = self.options[:key]
   end
 
   def enabled?
@@ -27,7 +28,7 @@ class Travis::Model::EncryptedColumn
   end
 
   def key
-    config.key
+    @key || config.key
   end
 
   def iv
@@ -43,7 +44,7 @@ class Travis::Model::EncryptedColumn
   end
 
   def encrypt?(data)
-    data.present? && enabled? && Travis::Features.feature_active?(:db_encryption)
+    data.present? && enabled?
   end
 
   def prefix_used?(data)
@@ -58,7 +59,7 @@ class Travis::Model::EncryptedColumn
     iv   = data[-16..-1]
     data = data[0..-17]
 
-    aes = create_aes :decrypt, key, iv
+    aes = create_aes :decrypt, key.to_s, iv
 
     result = aes.update(data) + aes.final
   end
@@ -66,7 +67,7 @@ class Travis::Model::EncryptedColumn
   def encrypt(data)
     iv = self.iv
 
-    aes = create_aes :encrypt, key, iv
+    aes = create_aes :encrypt, key.to_s, iv
 
     encrypted = aes.update(data) + aes.final
 
@@ -77,7 +78,7 @@ class Travis::Model::EncryptedColumn
   end
 
   def use_prefix?
-    Travis::Features.feature_inactive?(:db_encryption_prefix)
+    options.has_key?(:use_prefix) ? options[:use_prefix] : Travis::Features.feature_inactive?(:db_encryption_prefix)
   end
 
   def create_aes(mode = :encrypt, key, iv)

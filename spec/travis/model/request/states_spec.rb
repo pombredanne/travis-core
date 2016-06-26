@@ -5,7 +5,7 @@ describe Request::States do
 
   let(:owner)      { User.new(:login => 'joshk') }
   let(:repository) { Repository.new(:name => 'travis-ci', :owner => owner, :owner_name => 'travis-ci') }
-  let(:commit)     { Commit.new(:repository => repository, :commit => '12345', :branch => 'master', :message => 'message', :committed_at => Time.now) }
+  let(:commit)     { Commit.new(:repository => repository, :commit => '12345', :branch => 'master', :message => 'message', :committed_at => Time.now, :compare_url => 'https://github.com/svenfuchs/minimal/compare/master...develop') }
   let(:request)    { Request.new(:repository => repository, :commit => commit) }
 
   let(:approval)   { Request::Approval.any_instance }
@@ -14,7 +14,8 @@ describe Request::States do
   before :each do
     repository.save!
     Travis.stubs(:run_service).with(:github_fetch_config, is_a(Hash)).returns(config)
-    request.stubs(:add_build) # can't stub on the stupic association?
+    request.stubs(:add_build)
+    request.stubs(:creates_jobs?).returns(true)
   end
 
   it 'has the state :created when just created' do
@@ -45,6 +46,20 @@ describe Request::States do
       it 'sets the result to :accepted' do
         request.start
         request.result.should == :accepted
+      end
+
+      describe 'but rejected config' do
+        before :each do
+          approval.stubs(:config_accepted?).returns(false)
+        end
+
+        it 'does config, but resets it to nil' do
+          request.expects(:fetch_config).returns({})
+
+          request.start
+
+          request.config.should be_nil
+        end
       end
 
       describe 'but rejected branch' do
@@ -93,6 +108,12 @@ describe Request::States do
     it 'fetches the .travis.yml config from Github' do
       Travis.expects(:run_service).returns(config)
       request.configure
+    end
+
+    it 'merges existing configuration (e.g. from an api request)' do
+      request.config = { env: 'FOO=foo' }
+      request.configure
+      request.config.should == config.merge(env: 'FOO=foo')
     end
 
     it 'stores the config on the request' do
@@ -196,6 +217,38 @@ describe Request::States do
       request.save!
       request.start!
       request.reload.should be_finished
+    end
+  end
+
+  describe "adding a build" do
+    before do
+      request.unstub(:add_build)
+      Travis.config.notify_on_build_created = true
+    end
+
+    after do
+      request.stubs(:add_build)
+      Travis.config.notify_on_build_created = false
+    end
+
+    it "should create a build" do
+      request.save
+      request.add_build_and_notify.should be_a(Build)
+    end
+
+    it "should notify the build" do
+      request.save
+      Travis::Event.expects(:dispatch).with do |event, *args|
+        event.should == "build:created"
+      end
+      request.add_build_and_notify
+    end
+
+    it "shouldn't notify the build when the flag is disabled" do
+      Travis.config.notify_on_build_created = false
+      request.save
+      Travis::Event.expects(:dispatch).with { |e, *| e.should == "build:created" }.never
+      request.add_build_and_notify
     end
   end
 end

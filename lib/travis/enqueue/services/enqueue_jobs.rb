@@ -1,3 +1,7 @@
+require 'travis/services/base'
+require 'travis/support/instrumentation'
+require 'travis/support/exceptions/handling'
+
 module Travis
   module Enqueue
     module Services
@@ -7,6 +11,8 @@ module Travis
       #   * finds the oldest N queueable jobs and
       #   * enqueues them
       class EnqueueJobs < Travis::Services::Base
+        TIMEOUT = 2
+
         extend Travis::Instrumentation, Travis::Exceptions::Handling
 
         require 'travis/enqueue/services/enqueue_jobs/limit'
@@ -25,10 +31,15 @@ module Travis
           enqueue_all && reports unless disabled?
         end
         instrument :run
-        rescues :run, from: Exception
+        rescues :run, from: Exception, backtrace: false
 
         def disabled?
-          Travis::Features.feature_deactivated?(:job_queueing)
+          Timeout.timeout(TIMEOUT) do
+            Travis::Features.feature_deactivated?(:job_queueing)
+          end
+        rescue Timeout::Error, Redis::TimeoutError => e
+          Travis.logger.error("[enqueue] Timeout trying to check enqueuing feature flag.")
+          return false
         end
 
         private
@@ -43,6 +54,7 @@ module Travis
                   limit = nil
                   queueable = nil
                   Metriks.timer('enqueue.limit_per_owner').time do
+                    Travis.logger.info "About to evaluate jobs for: #{owner.login}."
                     limit = Limit.new(owner, jobs)
                     queueable = limit.queueable
                   end
@@ -61,6 +73,7 @@ module Travis
 
           def enqueue(jobs)
             jobs.each do |job|
+              Travis.logger.info("enqueueing slug=#{job.repository.slug} job_id=#{job.id}")
               Metriks.timer('enqueue.publish_job').time do
                 publish(job)
               end
@@ -74,13 +87,15 @@ module Travis
           def publish(job)
             Metriks.timer('enqueue.publish_job').time do
               payload = Travis::Api.data(job, for: 'worker', type: 'Job::Test', version: 'v0')
-              publisher(job.queue).publish(payload, properties: { type: payload['type'] })
+              publisher(job.queue).publish(payload, properties: { type: payload['type'], persistent: true })
             end
           end
 
           def jobs
             Metriks.timer('enqueue.fetch_jobs').time do
-              Job.includes(:owner).queueable.all
+              jobs = Job.includes(:owner).queueable.all
+              Travis.logger.info "Found #{jobs.size} jobs in total." if jobs.size > 0
+              jobs
             end
           end
 

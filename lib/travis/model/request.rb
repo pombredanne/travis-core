@@ -1,5 +1,6 @@
 require 'active_record'
 require 'simple_states'
+require 'travis/model/encrypted_column'
 
 # Models an incoming request. The only supported source for requests currently is Github.
 #
@@ -9,6 +10,7 @@ require 'simple_states'
 class Request < Travis::Model
   require 'travis/model/request/approval'
   require 'travis/model/request/branches'
+  require 'travis/model/request/pull_request'
   require 'travis/model/request/states'
 
   include States, SimpleStates
@@ -18,6 +20,14 @@ class Request < Travis::Model
   class << self
     def last_by_head_commit(head_commit)
       where(head_commit: head_commit).order(:id).last
+    end
+
+    def older_than(id)
+      recent.where('id < ?', id)
+    end
+
+    def recent(limit = 25)
+      order('id DESC').limit(limit)
     end
   end
 
@@ -36,35 +46,70 @@ class Request < Travis::Model
     read_attribute(:event_type) || 'push'
   end
 
+  def ref
+    payload['ref'] if payload
+  end
+
+  def branch_name
+    ref.scan(%r{refs/heads/(.*?)$}).flatten.first if ref
+  end
+
+  def tag_name
+    ref.scan(%r{refs/tags/(.*?)$}).flatten.first if ref
+  end
+
+  def api_request?
+    event_type == 'api'
+  end
+
   def pull_request?
     event_type == 'pull_request'
   end
 
+  def pull_request
+    @pull_request ||= PullRequest.new(payload && payload['pull_request'])
+  end
+
   def pull_request_title
-    if pull_request? && payload
-      payload['pull_request'] && payload['pull_request']['title']
-    end
+    pull_request.title if pull_request?
   end
 
   def pull_request_number
-    if pull_request? && payload
-      payload['pull_request'] && payload['pull_request']['number']
-    end
+    pull_request.number if pull_request?
+  end
+
+  def head_repo
+    pull_request.head_repo
+  end
+
+  def base_repo
+    pull_request.base_repo
+  end
+
+  def head_branch
+    pull_request.head_branch
+  end
+
+  def base_branch
+    pull_request.base_branch
   end
 
   def config_url
-    "https://api.github.com/repos/#{repository.slug}/contents/.travis.yml?ref=#{commit.commit}"
+    GH.full_url("repos/#{repository.slug}/contents/.travis.yml?ref=#{commit.commit}").to_s
   end
 
   def same_repo_pull_request?
     begin
-      payload = Hashr.new(self.payload)
-      head_repo = payload.try(:pull_request).try(:head).try(:repo).try(:full_name)
-      base_repo = payload.try(:pull_request).try(:base).try(:repo).try(:full_name)
       head_repo && base_repo && head_repo == base_repo
     rescue => e
-      puts "[request:#{id}] Couldn't determine whether pull request is from the same repository: #{e.message}"
+      Travis.logger.error("[request:#{id}] Couldn't determine whether pull request is from the same repository: #{e.message}")
       false
     end
+  end
+
+  def creates_jobs?
+    Build::Config::Matrix.new(
+      Build::Config.new(config).normalize, multi_os: repository.multi_os_enabled?, dist_group_expansion: repository.dist_group_expansion_enabled?
+    ).expand.size > 0
   end
 end

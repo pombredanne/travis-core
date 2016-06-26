@@ -10,21 +10,23 @@ module Travis
 
         def included(base)
           base.send(:instance_eval) do
-            let(:repository)    { stub_repo         }
-            let(:repo)          { stub_repo         }
-            let(:request)       { stub_request      }
-            let(:commit)        { stub_commit       }
-            let(:build)         { stub_build        }
-            let(:test)          { stub_test         }
-            let(:log)           { stub_log          }
-            let(:event)         { stub_event        }
-            let(:worker)        { stub_worker       }
-            let(:user)          { stub_user         }
-            let(:org)           { stub_org          }
-            let(:url)           { stub_url          }
-            let(:broadcast)     { stub_broadcast    }
-            let(:travis_token)  { stub_travis_token }
-            let(:cache)         { stub_cache        }
+            let(:repository)          { stub_repo                }
+            let(:repo)                { stub_repo                }
+            let(:request)             { stub_request             }
+            let(:commit)              { stub_commit              }
+            let(:build)               { stub_build               }
+            let(:test)                { stub_test                }
+            let(:log)                 { stub_log                 }
+            let(:annotation)          { stub_annotation          }
+            let(:annotation_provider) { stub_annotation_provider }
+            let(:event)               { stub_event               }
+            let(:worker)              { stub_worker              }
+            let(:user)                { stub_user                }
+            let(:org)                 { stub_org                 }
+            let(:url)                 { stub_url                 }
+            let(:broadcast)           { stub_broadcast           }
+            let(:travis_token)        { stub_travis_token        }
+            let(:cache)               { stub_cache               }
           end
         end
       end
@@ -32,6 +34,7 @@ module Travis
       def stub_repo(attributes = {})
         Stubs.stub 'repository', attributes.reverse_merge(
           id: 1,
+          owner: stub_user(id: 1, login: 'svenfuchs'),
           owner_type: 'User',
           owner_id: 1,
           owner_name: 'svenfuchs',
@@ -53,12 +56,20 @@ module Travis
           last_build_finished_at: Time.now.utc,
           last_build_state: :passed,
           last_build_duration: 60,
-          owner: nil,
           github_language: 'ruby',
-          github_id: 549743
+          github_id: 549743,
+          builds_only_with_travis_yml?: false,
+          settings: stub_settings,
+          users_with_permission: [],
+          default_branch: 'master',
+          current_build_id: nil
         )
       end
       alias stub_repository stub_repo
+
+      def stub_settings
+        Stubs.stub 'settings', 'ssh_keys' => [], 'env_vars' => []
+      end
 
       def stub_key(attributes = {})
         Stubs.stub 'key', attributes.reverse_merge(
@@ -68,19 +79,39 @@ module Travis
       end
 
       def stub_request(attributes = {})
+        repo = stub_repository
+        commit = stub_commit
         Stubs.stub 'request', attributes.reverse_merge(
           id: 1,
-          repository: stub_repository,
-          commit: stub_commit,
+          repository: repo,
+          repository_id: repo.id,
+          commit: commit,
+          commit_id: commit.id,
           config: {},
           event_type: 'push',
           head_commit: 'head-commit',
           base_commit: 'base-commit',
           token: 'token',
+          api_request?: false,
           pull_request?: false,
           comments_url: 'http://github.com/path/to/comments',
           config_url: 'https://api.github.com/repos/svenfuchs/minimal/contents/.travis.yml?ref=62aae5f70ceee39123ef',
-          result: :accepted
+          result: :accepted,
+          created_at: DateTime.new(2013, 01, 01, 0, 0, 0),
+          owner_type: 'User',
+          owner_id: 1,
+          owner_name: 'svenfuchs',
+          owner_email: 'svenfuchs@artweb-design.de',
+          message: 'a message',
+          branch_name: 'master',
+          tag_name: '',
+          pull_request: false,
+          pull_request_title: nil,
+          pull_request_number: nil,
+          head_repo: 'BanzaiMan/travis-core',
+          head_branch: 'feature-branch',
+          base_repo: 'travis-ci/travis-core',
+          base_branch: 'master',
         )
       end
 
@@ -138,6 +169,7 @@ module Travis
 
       def stub_test(attributes = {})
         log = self.log
+        annotation = stub_annotation(job_id: 1)
         test = Stubs.stub 'test', attributes.reverse_merge(
           id: 1,
           owner: stub_user,
@@ -149,6 +181,8 @@ module Travis
           commit: commit,
           log: log,
           log_id: log.id,
+          annotations: [annotation],
+          annotation_ids: [annotation.id],
           number: '2.1',
           config: { 'rvm' => '1.8.7', 'gemfile' => 'test/Gemfile.rails-2.3.x' },
           decrypted_config: { 'rvm' => '1.8.7', 'gemfile' => 'test/Gemfile.rails-2.3.x' },
@@ -163,7 +197,9 @@ module Travis
           finished_at: Time.now.utc,
           worker: 'ruby3.worker.travis-ci.org:travis-ruby-4',
           tags: 'tag-a,tag-b',
-          log_content: log.content
+          log_content: log.content,
+          ssh_key: nil,
+          secure_env_enabled?: true
         )
 
         source = stub_build(:matrix => [test])
@@ -187,6 +223,29 @@ module Travis
           content: 'the test log',
           number: 1,
           final: false
+        )
+      end
+
+      def stub_annotation(attributes = {})
+        Stubs.stub 'annotation', attributes.reverse_merge(
+          class: Stubs.stub('class', name: 'Annotation'),
+          id: 1,
+          job_id: attributes[:job_id] || test.id, # Needed to break the infinite loop in stub_test
+          annotation_provider_id: annotation_provider.id,
+          annotation_provider: annotation_provider,
+          description: "The job passed.",
+          url: "https://travis-ci.org/travis-ci/travis-ci/12345",
+          status: ""
+        )
+      end
+
+      def stub_annotation_provider(attributes = {})
+        Stubs.stub 'annotation_provider', attributes.reverse_merge(
+          class: Stubs.stub('class', name: 'AnnotationProvider'),
+          id: 1,
+          name: "Travis CI",
+          api_username: "travis-ci",
+          api_key: "0123456789abcdef",
         )
       end
 
@@ -218,18 +277,20 @@ module Travis
       def stub_user(attributes = {})
         Stubs.stub 'user', attributes.reverse_merge(
           id: 1,
+          github_id: 1,
           organizations: [org],
           name: 'Sven Fuchs',
           login: 'svenfuchs',
           email: 'svenfuchs@artweb-design.de',
           gravatar_id: '402602a60e500e85f2f5dc1ff3648ecb',
+          avatar_url: 'https://0.gravatar.com/avatar/402602a60e500e85f2f5dc1ff3648ecb',
           locale: 'de',
           github_oauth_token: 'token',
           syncing?: false,
           is_syncing: false,
           synced_at: Time.now.utc - 3600,
           tokens: [stub('token', token: 'token')],
-          github_scopes: Travis.config.oauth2.try(:scopes).to_s.split(','),
+          github_scopes: Travis.config.oauth2.to_h[:scopes].to_s.split(','),
           correct_scopes?: true,
           created_at: Time.now.utc - 7200
         )
@@ -273,6 +334,20 @@ module Travis
           slug: 'cache',
           branch: 'master',
           last_modified: Time.at(0).utc
+        )
+      end
+
+      def stub_email(attributes = {})
+        Stubs.stub 'email', attributes.reverse_merge(
+          email: 'email'
+        )
+      end
+
+      def stub_job(attributes = {})
+        Stubs.stub 'job', attributes.reverse_merge(
+          repository: stub_repository,
+          id: '42.1',
+          enqueue: true
         )
       end
     end

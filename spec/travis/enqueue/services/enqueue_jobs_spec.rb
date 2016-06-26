@@ -28,6 +28,13 @@ describe Travis::Enqueue::Services::EnqueueJobs do
       service.expects(:enqueue_all).never
       service.run
     end
+
+    describe "with a timeout" do
+      it "returns false when the timeout is hit" do
+        Travis::Features.stubs(:feature_deactivated?).raises(Timeout::Error)
+        service.disabled?.should == false
+      end
+    end
   end
 
   describe 'run' do
@@ -35,6 +42,11 @@ describe Travis::Enqueue::Services::EnqueueJobs do
     let(:test)      { stub_test(state: :created, enqueue: nil) }
 
     before :each do
+      settings = OpenStruct.new(
+        restricts_number_of_builds?: false,
+        env_vars: []
+      )
+      test.repository.stubs(:settings).returns(settings)
       scope = stub('scope')
       scope.stubs(:all).returns([test])
       Job.stubs(:queueable).returns(scope)
@@ -48,7 +60,7 @@ describe Travis::Enqueue::Services::EnqueueJobs do
 
     it 'publishes queueable jobs' do
       payload = Travis::Api.data(test, for: 'worker', type: 'Job::Test', version: 'v0')
-      publisher.expects(:publish).with(payload, properties: { type: 'test' })
+      publisher.expects(:publish).with(payload, properties: { type: 'test', persistent: true })
       service.run
     end
 
@@ -78,6 +90,14 @@ describe Travis::Enqueue::Services::EnqueueJobs do
           reports: reports
         }
       )
+    end
+  end
+
+  describe 'Logging' do
+    it 'logs the enqueue' do
+      service.stubs(:publish)
+      Travis.logger.expects(:info).with("enqueueing slug=svenfuchs/minimal job_id=42.1").once
+      service.send(:enqueue, [stub_job])
     end
   end
 end

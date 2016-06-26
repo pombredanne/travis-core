@@ -1,8 +1,8 @@
-require 'active_record'
 require 'metriks'
 require 'active_support/core_ext/string/filters'
+require 'travis/model'
 
-class Log < Travis::Model
+class Log < Travis::LogsModel
   require 'travis/model/log/part'
 
   AGGREGATE_PARTS_SELECT_SQL = <<-sql.squish
@@ -22,6 +22,7 @@ class Log < Travis::Model
   include Travis::Event
 
   belongs_to :job
+  belongs_to :removed_by, class_name: 'User', foreign_key: :removed_by
   has_many :parts, class_name: 'Log::Part', foreign_key: :log_id, :dependent => :destroy
 
   def content
@@ -35,10 +36,12 @@ class Log < Travis::Model
   end
 
   def clear!
-    update_attributes!(aggregated_at: nil, archived_at: nil, archive_verified: nil)
     update_column(:content, '')        # TODO why in the world does update_attributes not set content to ''
     update_column(:aggregated_at, nil) # TODO why in the world does update_attributes not set aggregated_at to nil?
-    parts.delete_all
+    update_column(:archived_at, nil)
+    update_column(:archive_verified, nil)
+    Log::Part.where(log_id: id).delete_all
+    parts.reload
   end
 
   def archived?

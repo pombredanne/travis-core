@@ -211,4 +211,26 @@ describe User do
       user.should be_correct_scopes
     end
   end
+
+  describe 'inspect' do
+    context 'when user has GitHub OAuth token' do
+      before :each do
+        user.github_oauth_token = 'foobarbaz'
+      end
+
+      it 'does not include the user\'s GitHub OAuth token' do
+        user.inspect.should_not include('foobarbaz')
+      end
+    end
+
+    context 'when user has no GitHub OAuth token' do
+      before :each do
+        user.github_oauth_token = nil
+      end
+
+      it 'indicates nil GitHub OAuth token' do
+        user.inspect.should include('github_oauth_token: nil')
+      end
+    end
+  end
 end

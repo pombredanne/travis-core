@@ -34,6 +34,7 @@ module Travis
                 'commit_id' => build.commit_id,
                 'number' => build.number,
                 'pull_request' => build.pull_request?,
+                'pull_request_number' => build.pull_request_number,
                 'config' => build.config.try(:except, :source_key),
                 'state' => build.state.to_s,
                 'previous_state' => build.previous_state.to_s,
@@ -49,6 +50,7 @@ module Travis
                 'id' => repository.id,
                 'key' => repository.key.try(:public_key),
                 'slug' => repository.slug,
+                'name' => repository.name,
                 'owner_email' => repository.owner_email,
                 'owner_avatar_url' => repository.owner.try(:avatar_url)
               }
